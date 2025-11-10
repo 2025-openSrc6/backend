@@ -20,6 +20,9 @@
 # production
 /build
 
+# drizzle migration output
+/drizzle
+
 # misc
 .DS_Store
 *.pem
