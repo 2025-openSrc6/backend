@@ -1,0 +1,14 @@
+# Build output
+.next
+out
+build
+
+# Dependencies
+node_modules
+
+# Misc
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.tmp
+coverage
