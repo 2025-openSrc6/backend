@@ -182,11 +182,13 @@ DeltaX는 금(PAX Gold)과 비트코인의 가격 변동을 예측하고, 다양
 
 ---
 
-## 시작하기
+## 개발 시작
 
-```bash
-# TBD - 개발 진행 중
-```
+팀 개발 환경 설정 및 API 사용 방법은 [docs/](./docs/) 디렉토리를 참고하세요.
+
+- **[docs/QUICK_START.md](./docs/QUICK_START.md)** - 5분 빠른 시작 가이드
+- **[docs/SETUP.md](./docs/SETUP.md)** - 팀 개발 환경 설정
+- **[docs/DB_USAGE.md](./docs/DB_USAGE.md)** - 데이터베이스 상세 문서
 
 ---
 

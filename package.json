@@ -9,8 +9,9 @@
     "lint": "eslint",
     "analyze": "ANALYZE=true next build",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit push",
+    "db:migrate": "npx wrangler d1 execute deltax-db --remote --file=drizzle/0000_natural_rictor.sql",
     "db:studio": "drizzle-kit studio",
+    "db:seed": "npx wrangler d1 execute deltax-db --remote --file=scripts/seed.sql",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -28,15 +29,18 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251109.0",
     "@next/bundle-analyzer": "^16.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.46.0"
   }
 }

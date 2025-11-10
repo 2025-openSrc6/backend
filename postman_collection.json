@@ -1,0 +1,194 @@
+{
+  "info": {
+    "name": "DeltaX API",
+    "description": "DeltaX - Rounds and Bets Management API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "health"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Rounds",
+      "item": [
+        {
+          "name": "Get All Rounds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/rounds",
+              "host": ["{{base_url}}"],
+              "path": ["api", "rounds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Round",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roundKey\": \"round-2025-01-10-1h\",\n  \"timeframe\": \"1h\",\n  \"status\": \"scheduled\",\n  \"lockingStartsAt\": \"2025-01-10T10:00:00Z\",\n  \"lockingEndsAt\": \"2025-01-10T11:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/rounds",
+              "host": ["{{base_url}}"],
+              "path": ["api", "rounds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Round (6h)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roundKey\": \"round-2025-01-10-6h\",\n  \"timeframe\": \"6h\",\n  \"status\": \"scheduled\",\n  \"lockingStartsAt\": \"2025-01-10T12:00:00Z\",\n  \"lockingEndsAt\": \"2025-01-10T18:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/rounds",
+              "host": ["{{base_url}}"],
+              "path": ["api", "rounds"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Round (1d)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roundKey\": \"round-2025-01-10-1d\",\n  \"timeframe\": \"1d\",\n  \"status\": \"active\",\n  \"lockingStartsAt\": \"2025-01-09T00:00:00Z\",\n  \"lockingEndsAt\": \"2025-01-10T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/rounds",
+              "host": ["{{base_url}}"],
+              "path": ["api", "rounds"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Bets",
+      "item": [
+        {
+          "name": "Get All Bets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/bets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "bets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bets by Round",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/bets?roundId=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "bets"],
+              "query": [
+                {
+                  "key": "roundId",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Bet (Gold)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roundId\": 1,\n  \"walletAddress\": \"0x1111111111111111111111111111111111111111\",\n  \"selection\": \"gold\",\n  \"amount\": \"100.50\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/bets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "bets"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Bet (BTC)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roundId\": 1,\n  \"walletAddress\": \"0x2222222222222222222222222222222222222222\",\n  \"selection\": \"btc\",\n  \"amount\": \"50.25\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/bets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "bets"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}

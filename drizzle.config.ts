@@ -4,16 +4,13 @@ import type { Config } from 'drizzle-kit';
 loadEnv({ path: '.env' });
 loadEnv({ path: '.env.local' });
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not defined. Add it to your .env or .env.local file.');
-}
-
 export default {
   schema: './db/schema/index.ts',
   out: './drizzle',
-  dialect: 'postgresql',
+  dialect: 'sqlite',  // D1은 SQLite 기반
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    wranglerConfigPath: 'wrangler.toml',  // Wrangler 설정 파일
+    dbName: 'deltax-db',  // wrangler.toml의 database_name
   },
   strict: true,
   verbose: true,

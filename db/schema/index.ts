@@ -1,69 +1,50 @@
 import {
   integer,
-  numeric,
-  pgTable,
-  serial,
+  real,
+  sqliteTable,
   text,
-  timestamp,
-  uniqueIndex,
-} from "drizzle-orm/pg-core";
+  primaryKey,
+} from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
-export const rounds = pgTable(
+export const rounds = sqliteTable(
   "rounds",
   {
-    id: serial("id").primaryKey(),
-    roundKey: text("round_key").notNull(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    roundKey: text("round_key").notNull().unique(),
     timeframe: text("timeframe").notNull(), // e.g. 1m, 6h, 1d
     status: text("status").default("scheduled").notNull(),
-    lockingStartsAt: timestamp("locking_starts_at", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    lockingEndsAt: timestamp("locking_ends_at", {
-      withTimezone: true,
-      mode: "date",
-    }).notNull(),
-    settledAt: timestamp("settled_at", {
-      withTimezone: true,
-      mode: "date",
-    }),
+    lockingStartsAt: integer("locking_starts_at", { mode: "timestamp_ms" }).notNull(),
+    lockingEndsAt: integer("locking_ends_at", { mode: "timestamp_ms" }).notNull(),
+    settledAt: integer("settled_at", { mode: "timestamp_ms" }),
     winningAsset: text("winning_asset"),
-    lockPriceGold: numeric("lock_price_gold", { precision: 18, scale: 6 }),
-    lockPriceBtc: numeric("lock_price_btc", { precision: 18, scale: 8 }),
-    settlePriceGold: numeric("settle_price_gold", { precision: 18, scale: 6 }),
-    settlePriceBtc: numeric("settle_price_btc", { precision: 18, scale: 8 }),
-    createdAt: timestamp("created_at", {
-      withTimezone: true,
-      mode: "date",
-    })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", {
-      withTimezone: true,
-      mode: "date",
-    })
-      .defaultNow()
-      .notNull(),
+    lockPriceGold: real("lock_price_gold"),
+    lockPriceBtc: real("lock_price_btc"),
+    settlePriceGold: real("settle_price_gold"),
+    settlePriceBtc: real("settle_price_btc"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
-  (table) => ({
-    roundKeyIdx: uniqueIndex("rounds_round_key_unique").on(table.roundKey),
-  }),
 );
 
-export const bets = pgTable("bets", {
-  id: serial("id").primaryKey(),
-  roundId: integer("round_id")
-    .notNull()
-    .references(() => rounds.id, { onDelete: "cascade" }),
-  walletAddress: text("wallet_address").notNull(),
-  selection: text("selection").notNull(), // gold | btc
-  amount: numeric("amount", { precision: 18, scale: 4 }).notNull(),
-  txDigest: text("tx_digest"),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-    .defaultNow()
-    .notNull(),
-});
+export const bets = sqliteTable(
+  "bets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    roundId: integer("round_id").notNull().references(() => rounds.id, { onDelete: "cascade" }),
+    walletAddress: text("wallet_address").notNull(),
+    selection: text("selection").notNull(), // gold | btc
+    amount: real("amount").notNull(),
+    txDigest: text("tx_digest"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+);
 
 export const roundsRelations = relations(rounds, ({ many }) => ({
   bets: many(bets),
