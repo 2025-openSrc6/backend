@@ -1,0 +1,290 @@
+# delta x
+
+## 프로젝트 정의
+
+금 vs 비트 누가 더 가치가 높냐? 이걸 예측하자
+단위 기간 (라운드) 별 상승 간단 베팅
+금과 비트코인의 가격 변동을 예측하는 게임화된 베팅 플랫폼
+
+- 다양한 시간대(1분, 6시간, 1일) 베팅으로 라이트-헤비 유저 모두 수용
+- NFT와 게임화 요소로 유저 리텐션 강화
+- 투명한 자산 관리(스마트 컨트랙트)와 편리한 UX(웹2 백엔드) 동시 달성
+
+### dApp
+
+web2 + web3 하이브리드 앱
+
+sui 중간 도입 (하이브리드)
+
+1. sui (for 모든 자산과 거래 관련 로직)
+   1. 지갑 = 로그인
+   2. 입금/출금
+   3. 베팅 금액 sui smart contract에 lock
+   4. 라운드 종료 시 smart contract 가 자동 배당
+2. backend (next api router)
+   1. 가격 데이터 (전통적인 백엔드 로직들)
+   2. UI/UX
+   3. analytics
+
+## 파트 분배
+
+4인 모두 백엔드 로직 작성합니다
+
+### 샵: 김영민
+
+- NFT 민팅
+- 구성
+
+### 차트: 김현준
+
+- 차트 시각화
+- 단위별로
+
+### 베팅 시스템: 장태웅
+
+- 라운드 관리
+- 풀관리
+
+### 메인페이지 구성: 김도영
+
+- 랭킹
+- 계좌연동
+- 포인트 시스템
+
+## 기술 스택
+
+### frontend
+
+react + next.js + typescript
+
+### backend
+
+next.js
+sui
+
+### DB
+
+postreSQL + drizzleORM
+pinata
+redis
+
+### deploy
+
+route53
+AWS S3 + CloudFront
+
+### 아키텍쳐
+
+```mermaid
+graph TB
+    subgraph Client["🖥️ Client Layer"]
+        UI[React UI Components]
+        WalletSDK[@mysten/dapp-kit]
+        SuiJS[@mysten/sui.js]
+        WSClient[Socket.io Client]
+    end
+
+    subgraph Gateway["🚪 API Gateway"]
+        NextAPI[Next.js API Routes]
+        WSServer[WebSocket Server]
+    end
+
+    subgraph Logic["⚙️ Business Logic"]
+        BettingLogic[Betting System<br/>장태웅]
+        PriceAgg[Price Aggregator<br/>김현준]
+        RoundScheduler[Round Scheduler<br/>장태웅]
+        NFTLogic[NFT Logic<br/>김영민]
+        RankingLogic[Ranking System<br/>김도영]
+    end
+
+    subgraph Data["💾 Data Layer"]
+        PG[(PostgreSQL<br/>Users, Rounds, Bets)]
+        Redis[(Redis<br/>Cache, Real-time)]
+        SuiChain[Sui Blockchain<br/>NFTs, Betting Pool]
+        IPFS[Pinata IPFS<br/>NFT Metadata]
+    end
+
+    subgraph External["🌐 External Services"]
+        Kitco[Kitco API<br/>Gold Price]
+        CoinGecko[CoinGecko API<br/>BTC Price]
+        SuiRPC[Sui RPC Node]
+    end
+
+    UI --> NextAPI
+    UI --> WSClient
+    UI --> WalletSDK
+    WalletSDK --> SuiJS
+    WSClient --> WSServer
+
+    NextAPI --> BettingLogic
+    NextAPI --> NFTLogic
+    NextAPI --> RankingLogic
+    WSServer --> PriceAgg
+    WSServer --> BettingLogic
+
+    BettingLogic --> PG
+    BettingLogic --> Redis
+    BettingLogic --> SuiChain
+
+    PriceAgg --> Redis
+    PriceAgg --> PG
+    PriceAgg --> Kitco
+    PriceAgg --> CoinGecko
+
+    RoundScheduler --> BettingLogic
+    RoundScheduler --> PriceAgg
+
+    NFTLogic --> PG
+    NFTLogic --> SuiChain
+    NFTLogic --> IPFS
+
+    RankingLogic --> PG
+    RankingLogic --> Redis
+
+    SuiJS --> SuiRPC
+    SuiChain --> SuiRPC
+```
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                     PRESENTATION LAYER                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │  메인/랭킹   │  │   차트 UI    │  │  샵/베팅 UI  │         │
+│  │  (김도영)    │  │  (김현준)    │  │ (영민/태웅)  │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+│         React + Next.js 14 + TypeScript + Tailwind              │
+└─────────────────────────────────────────────────────────────────┘
+                              ↕
+┌─────────────────────────────────────────────────────────────────┐
+│                    API GATEWAY LAYER                            │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │            Next.js API Routes (/app/api/...)             │  │
+│  │  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐        │  │
+│  │  │ /user  │  │ /round │  │  /nft  │  │ /shop  │        │  │
+│  │  └────────┘  └────────┘  └────────┘  └────────┘        │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │         WebSocket Server (Socket.io)                     │  │
+│  │  - Price Stream  - Round Events  - Bet Updates          │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↕
+┌─────────────────────────────────────────────────────────────────┐
+│                  BUSINESS LOGIC LAYER                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │ 랭킹 시스템   │  │ 베팅 로직    │  │ NFT 로직     │         │
+│  │ (김도영)     │  │ (장태웅)     │  │ (김영민)     │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │          Price Aggregator (김현준)                       │  │
+│  │  - Kitco Poller  - CoinGecko Poller  - Data Normalizer  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │          Round Scheduler (장태웅)                        │  │
+│  │  - Cron Jobs (1min/6h/1d)  - Price Snapshot             │  │
+│  │  - Winner Calculation      - Settlement Trigger         │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↕
+┌─────────────────────────────────────────────────────────────────┐
+│                       DATA LAYER                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │ PostgreSQL   │  │    Redis     │  │  Sui Chain   │         │
+│  │              │  │              │  │              │         │
+│  │ - Users      │  │ - Prices     │  │ - NFTs       │         │
+│  │ - Rounds     │  │ - Round State│  │ - Bets Pool  │         │
+│  │ - Bets       │  │ - Leaderboard│  │ - Balances   │         │
+│  │ - Txns       │  │ - Sessions   │  │              │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+│                                              ↕                   │
+│                                      ┌──────────────┐           │
+│                                      │    Pinata    │           │
+│                                      │    (IPFS)    │           │
+│                                      │ - NFT Meta   │           │
+│                                      └──────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+                              ↕
+┌─────────────────────────────────────────────────────────────────┐
+│                  EXTERNAL SERVICES LAYER                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │  Kitco API   │  │CoinGecko API │  │ Sui RPC Node │         │
+│  │  (금 가격)   │  │  (BTC 가격)  │  │ (Blockchain) │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 메인 규칙 설명
+
+### 예측 라운드 진행
+
+1. 1min 단위로 예측
+   1. 고정 지급 방식 - 배당율 고정 (TBD %)
+2. 6hour 단위로 예측 (UTC+9)
+   1. 라운드 진행
+   2. 라운드 별 pool-betting
+   3. 02시, 08시, 14시, 20시 시작 (TBD)
+3. 1day 단위로 예측
+   1. 라운드 진행
+   2. 라운드 별 pool-betting
+
+### 포인트 지급
+
+6hour 마다 출석 시 5,000del 지급
+
+## 재화 설명
+
+### del
+
+1. 메인 재화
+2. nft 구매 가능
+3. 예측 베팅 가능
+
+### 크리스탈
+
+1. 환전 재화
+2. nft 구매 불가
+3. 예측 베팅 가능
+
+### del vs 크리스탈
+
+del 재화는 가장 기본이 되는 재화로 nft 구매와 예측 베팅에 사용 가능합니다.
+nft는 예측 능력을 증명하는 징표로 존재해야합니다. 현금 환전으로 nft를 구매할 수 없어야합니다.
+현금 환전으로는 크리스탈이 제공됩니다. 크리스탈을 이용해 예측 라운드에 참여할 수 있습니다. 예측 라운드 종료 후 올바른 예측이었다면 유저는 크리스탈 대신 del 재화를 수령합니다.
+따라서 유저는 환전으로 얻은 크리스탈을 이용해 예측 라운드에 참여해야 비로소 nft 및 악세사리 구매에 사용 가능한 del 재화를 얻을 수 있습니다
+
+### 환전 비율 (TBD)
+
+1 del = 1 크리스탈 = 1USD
+재화는 외부로 반출이 불가합니다. 법의 테두리 안에서 예측 라운드를 즐겨주세요.
+
+## 게임화 요소
+
+### nft
+
+nft 는 지갑 귀속으로 거래 불가
+
+A 티어 (이름 미정) - 300,000D
+B 티어 - 500,000D
+C 티어 - 1,000,000D
+D 티어 - 10,000,000D
+E 티어 - 100,000,000D
+
+nft는 희귀한 자원입니다. 획득 시 모든 사용자에게 UI로 알려집니다.
+nft 구매 시 티어(등급)에 따라 사용자 프로필에 테두리가 생깁니다.
+
+### 악세사리
+
+사용자는 가입 시 자신의 지갑 주소 또는 랜덤한 닉네임 (0x7F60) 을 가지게 됩니다.
+nft 보다 낮은 가격으로 단기 입문 사용자 유치 가능
+
+고정 닉네임 (닉네임 사용자 지정 가능)
+닉네임 색상
+
+## 운영
+
+### 수수료 구조
+
+## 시나리오
