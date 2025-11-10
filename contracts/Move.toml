@@ -1,0 +1,15 @@
+[package]
+name = "deltaX"
+version = "0.0.1"
+edition = "2024.beta"
+
+[addresses]
+deltaX = "0x0"
+std = "0x1"
+sui = "0x2"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
+
+[dev-addresses]
+deltaX = "0x0"
