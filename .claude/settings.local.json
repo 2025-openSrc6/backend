@@ -10,7 +10,8 @@
       "Bash(rm:*)",
       "Bash(git check-ignore:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []
