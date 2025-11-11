@@ -1,0 +1,105 @@
+// DeltaX Database Schema
+// Generated from db/schema/index.ts
+// View with: https://dbdiagram.io
+
+Table rounds {
+  id integer [primary key, increment]
+  roundKey text [not null, unique]
+  timeframe text [not null, note: "1m, 6h, 1d"]
+  status text [not null, default: "scheduled"]
+  lockingStartsAt integer [not null, note: "timestamp in milliseconds"]
+  lockingEndsAt integer [not null, note: "timestamp in milliseconds"]
+  settledAt integer [note: "timestamp in milliseconds"]
+  winningAsset text [note: "gold or btc"]
+  lockPriceGold real
+  lockPriceBtc real
+  settlePriceGold real
+  settlePriceBtc real
+  createdAt integer [not null, default: "now()"]
+  updatedAt integer [not null, default: "now()"]
+
+  indexes {
+    roundKey [unique]
+  }
+}
+
+Table bets {
+  id integer [primary key, increment]
+  roundId integer [not null]
+  walletAddress text [not null]
+  selection text [not null, note: "gold or btc"]
+  amount real [not null]
+  txDigest text [note: "Sui transaction hash"]
+  createdAt integer [not null, default: "now()"]
+
+  indexes {
+    roundId
+    walletAddress
+  }
+}
+
+Table users {
+  id integer [primary key, increment]
+  walletAddress text [not null, unique]
+  nickname text
+  hasBoostToken boolean [default: false, note: "부스트 토큰 소유 여부"]
+  greenMushroomCount integer [default: 0, note: "그린 머쉬룸 개수"]
+  createdAt integer [not null, default: "now()"]
+  updatedAt integer [not null, default: "now()"]
+}
+
+Table nft {
+  id integer [primary key, increment]
+  userId integer [not null]
+  tier text [not null, note: "obsidian, aurum, nova, aetherion, singularity"]
+  nftId text [not null, unique, note: "Sui 블록체인 NFT ID"]
+  acquiredAt integer [not null, default: "now()"]
+
+  indexes {
+    userId
+    tier
+  }
+}
+
+Table userAccessory {
+  id integer [primary key, increment]
+  userId integer [not null]
+  nicknameColor text [not null, note: "단색, 2중, 3중, 무지개"]
+  acquiredAt integer [not null, default: "now()"]
+
+  indexes {
+    userId
+  }
+}
+
+Table shopItem {
+  id integer [primary key, increment]
+  itemName text [not null, note: "닉네임, NFT(tier), 부스트토큰 등"]
+  itemType text [not null, note: "nickname, nft, boost_token, green_mushroom"]
+  priceType text [not null, note: "del 또는 crystal"]
+  price real [not null]
+  tier text [note: "NFT 티어만 해당"]
+  createdAt integer [not null, default: "now()"]
+  updatedAt integer [not null, default: "now()"]
+}
+
+Table purchaseHistory {
+  id integer [primary key, increment]
+  userId integer [not null]
+  shopItemId integer [not null]
+  priceType text [not null, note: "del 또는 crystal"]
+  paidAmount real [not null]
+  purchasedAt integer [default: "now()"]
+
+  indexes {
+    userId
+    purchasedAt
+  }
+}
+
+// Relationships (cascade on delete)
+Ref: bets.roundId > rounds.id
+Ref: nft.userId > users.id
+Ref: userAccessory.userId > users.id
+Ref: purchaseHistory.userId > users.id
+Ref: purchaseHistory.shopItemId > shopItem.id
