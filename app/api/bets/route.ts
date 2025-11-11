@@ -1,7 +1,9 @@
-import { getDbFromContext } from "@/lib/db";
-import { bets } from "@/db/schema";
-import type { NewBet } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { getDbFromContext } from '@/lib/db';
+import { bets } from '@/db/schema';
+import type { NewBet } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { NextRequest, NextResponse } from 'next/server';
+import type { NextContext } from '@/lib/types';
 
 /**
  * GET /api/bets?roundId=1
@@ -13,39 +15,32 @@ import { eq } from "drizzle-orm";
  * Response: { success: true, data: Bet[] }
  * ```
  */
-export async function GET(request: Request, context: any) {
+export async function GET(request: NextRequest, context: NextContext) {
   try {
-    const { searchParams } = new URL(request.url);
-    const roundId = searchParams.get("roundId");
+    const { searchParams } = request.nextUrl;
+    const roundId = searchParams.get('roundId'); // UUID(string)
 
     const db = getDbFromContext(context);
 
-    let allBets;
+    const allBets = roundId
+      ? await db.select().from(bets).where(eq(bets.roundId, roundId))
+      : await db.select().from(bets);
 
-    if (roundId) {
-      allBets = await db
-        .select()
-        .from(bets)
-        .where(eq(bets.roundId, parseInt(roundId)));
-    } else {
-      allBets = await db.select().from(bets);
-    }
-
-    return Response.json(
+    return NextResponse.json(
       {
         success: true,
         data: allBets,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
-    console.error("Failed to fetch bets:", error);
-    return Response.json(
+    console.error('Failed to fetch bets:', error);
+    return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -65,60 +60,76 @@ export async function GET(request: Request, context: any) {
  * }
  * ```
  */
-export async function POST(request: Request, context: any) {
+export async function POST(request: NextRequest, context: NextContext) {
   try {
-    const body = await request.json() as Partial<NewBet>;
+    const raw = (await request.json()) as Partial<NewBet> & {
+      walletAddress?: string;
+      selection?: string;
+      txDigest?: string;
+    };
 
     const db = getDbFromContext(context);
 
-    // 필수 필드 검증
-    if (!body.roundId || !body.walletAddress || !body.selection || body.amount === undefined) {
-      return Response.json(
+    // Backward-compatible field mapping
+    const userAddress = raw.userAddress ?? raw.walletAddress;
+    const prediction = raw.prediction ?? (raw.selection ? raw.selection.toUpperCase() : undefined);
+    const suiTxHash = raw.suiTxHash ?? raw.txDigest;
+
+    // Required fields validation
+    if (
+      !raw.roundId ||
+      !userAddress ||
+      prediction === undefined ||
+      raw.amount === undefined ||
+      !raw.currency
+    ) {
+      return NextResponse.json(
         {
           success: false,
-          error: "Missing required fields: roundId, walletAddress, selection, amount",
+          error: 'Missing required fields: roundId, userAddress, prediction, amount, currency',
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // selection 값 검증
-    if (!["gold", "btc"].includes(body.selection)) {
-      return Response.json(
+    // Prediction validation
+    if (!['GOLD', 'BTC'].includes(prediction)) {
+      return NextResponse.json(
         {
           success: false,
-          error: "Invalid selection. Must be 'gold' or 'btc'",
+          error: "Invalid prediction. Must be 'GOLD' or 'BTC'",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const result = await db
       .insert(bets)
       .values({
-        roundId: body.roundId,
-        walletAddress: body.walletAddress,
-        selection: body.selection,
-        amount: body.amount,
-        txDigest: body.txDigest || undefined,
+        roundId: raw.roundId,
+        userAddress,
+        prediction,
+        amount: raw.amount,
+        currency: raw.currency,
+        suiTxHash: suiTxHash || undefined,
       })
       .returning();
 
-    return Response.json(
+    return NextResponse.json(
       {
         success: true,
         data: result[0],
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to create bet:", error);
-    return Response.json(
+    console.error('Failed to create bet:', error);
+    return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

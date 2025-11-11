@@ -1,6 +1,8 @@
 import { getDbFromContext } from '@/lib/db';
 import { rounds } from '@/db/schema';
 import { eq, desc, and } from 'drizzle-orm';
+import { NextRequest, NextResponse } from 'next/server';
+import { NextContext } from '@/lib/types';
 
 /**
  * GET /api/rounds
@@ -12,12 +14,11 @@ import { eq, desc, and } from 'drizzle-orm';
  * Response: { success: true, data: Round[], pagination: { limit, offset, total } }
  * ```
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function GET(request: Request, context: any) {
+export async function GET(request: NextRequest, context: NextContext) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = request.nextUrl;
     const type = searchParams.get('type'); // '1MIN', '6HOUR', '1DAY'
-    const status = searchParams.get('status'); // 'OPEN', 'COMPLETED', etc.
+    const status = searchParams.get('status'); // 'OPEN', 'CLOSED', 'SCHEDULED'
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = parseInt(searchParams.get('offset') || '0');
 
@@ -28,22 +29,24 @@ export async function GET(request: Request, context: any) {
     if (type) {
       filters.push(eq(rounds.type, type));
     }
+
     if (status) {
       filters.push(eq(rounds.status, status));
     }
 
     // 쿼리 실행
     const query = db.select().from(rounds);
+
     const results =
       filters.length > 0
         ? await query
             .where(and(...filters))
-            .orderBy(desc(rounds.start_time))
+            .orderBy(desc(rounds.startTime))
             .limit(limit)
             .offset(offset)
-        : await query.orderBy(desc(rounds.start_time)).limit(limit).offset(offset);
+        : await query.orderBy(desc(rounds.startTime)).limit(limit).offset(offset);
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       data: results,
       pagination: {
@@ -54,7 +57,7 @@ export async function GET(request: Request, context: any) {
     });
   } catch (error) {
     console.error('GET /api/rounds error:', error);
-    return Response.json(
+    return NextResponse.json(
       {
         success: false,
         error: error instanceof Error ? error.message : 'Internal server error',
