@@ -1,98 +1,65 @@
-import { getDbFromContext } from "@/lib/db";
-import { rounds } from "@/db/schema";
-import type { NewRound } from "@/db/schema";
+import { getDbFromContext } from '@/lib/db';
+import { rounds } from '@/db/schema';
+import { eq, desc, and } from 'drizzle-orm';
 
 /**
  * GET /api/rounds
- * 모든 라운드를 조회합니다
+ * 라운드를 조회합니다 (필터링 및 페이지네이션 지원)
  *
  * @example
  * ```
- * GET /api/rounds
- * Response: { success: true, data: Round[] }
+ * GET /api/rounds?type=6HOUR&status=OPEN&limit=10&offset=0
+ * Response: { success: true, data: Round[], pagination: { limit, offset, total } }
  * ```
  */
-export async function GET(_request: Request, context: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function GET(request: Request, context: any) {
   try {
-    const db = getDbFromContext(context);
-    const allRounds = await db.select().from(rounds);
-
-    return Response.json(
-      {
-        success: true,
-        data: allRounds,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Failed to fetch rounds:", error);
-    return Response.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * POST /api/rounds
- * 새로운 라운드를 생성합니다
- *
- * @example
- * ```json
- * {
- *   "roundKey": "round_001",
- *   "timeframe": "1h",
- *   "lockingStartsAt": 1731235200000,
- *   "lockingEndsAt": 1731238800000
- * }
- * ```
- */
-export async function POST(request: Request, context: any) {
-  try {
-    const body = await request.json() as Partial<NewRound>;
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type'); // '1MIN', '6HOUR', '1DAY'
+    const status = searchParams.get('status'); // 'OPEN', 'COMPLETED', etc.
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
     const db = getDbFromContext(context);
 
-    // 필수 필드 검증
-    if (!body.roundKey || !body.timeframe || !body.lockingStartsAt || !body.lockingEndsAt) {
-      return Response.json(
-        {
-          success: false,
-          error: "Missing required fields: roundKey, timeframe, lockingStartsAt, lockingEndsAt",
-        },
-        { status: 400 }
-      );
+    // 필터 조건 구성
+    const filters = [];
+    if (type) {
+      filters.push(eq(rounds.type, type));
+    }
+    if (status) {
+      filters.push(eq(rounds.status, status));
     }
 
-    const result = await db
-      .insert(rounds)
-      .values({
-        roundKey: body.roundKey,
-        timeframe: body.timeframe,
-        status: body.status || "scheduled",
-        lockingStartsAt: body.lockingStartsAt,
-        lockingEndsAt: body.lockingEndsAt,
-      })
-      .returning();
+    // 쿼리 실행
+    const query = db.select().from(rounds);
+    const results =
+      filters.length > 0
+        ? await query
+            .where(and(...filters))
+            .orderBy(desc(rounds.start_time))
+            .limit(limit)
+            .offset(offset)
+        : await query.orderBy(desc(rounds.start_time)).limit(limit).offset(offset);
 
-    return Response.json(
-      {
-        success: true,
-        data: result[0],
+    return Response.json({
+      success: true,
+      data: results,
+      pagination: {
+        limit,
+        offset,
+        total: results.length,
       },
-      { status: 201 }
-    );
+    });
   } catch (error) {
-    console.error("Failed to create round:", error);
+    console.error('GET /api/rounds error:', error);
     return Response.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Internal server error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
