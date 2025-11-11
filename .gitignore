@@ -49,3 +49,11 @@ next-env.d.ts
 
 # 정리본 (personal notes - do not track)
 /정리본
+
+# local sqlite db files (fallback)
+delta.db
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite-journal

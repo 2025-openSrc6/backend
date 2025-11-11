@@ -1,5 +1,6 @@
-import { drizzle } from "drizzle-orm/d1";
-import type { CloudflareEnv } from "@/lib/types";
+import { drizzle } from 'drizzle-orm/d1';
+import type { CloudflareEnv } from '@/lib/types';
+import * as schema from '@/db/schema';
 
 /**
  * D1 데이터베이스에 대한 Drizzle ORM 클라이언트를 생성합니다.
@@ -24,7 +25,8 @@ export function initializeDb(env: CloudflareEnv) {
   }
 
   return drizzle(env.DB, {
-    logger: process.env.NODE_ENV === "development",
+    schema,
+    logger: process.env.NODE_ENV === 'development',
   });
 }
 
