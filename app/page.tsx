@@ -1,15 +1,108 @@
-export default function Home() {
+"use client"
+
+import { useState } from "react"
+import Image from "next/image"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Wallet, Zap } from "lucide-react"
+import { RankingList } from "@/components/RankingList"
+import { AccountConnectCard } from "@/components/AccountConnectCard"
+import { PointsPanel } from "@/components/PointsPanel"
+import { DashboardMiniChart } from "@/components/DashboardMiniChart" // ← 이거 추가
+
+export default function HomePage() {
+  const [isConnected, setIsConnected] = useState(false)
+  const [walletAddress, setWalletAddress] = useState("")
+  const [points, setPoints] = useState(12000)
+
+  const handleConnect = () => {
+    setIsConnected(true)
+    setWalletAddress("0x742d...9f3a")
+  }
+
+  const handleDisconnect = () => {
+    setIsConnected(false)
+    setWalletAddress("")
+  }
+
   return (
-    <main className="flex min-h-screen flex-col gap-6 bg-background px-8 py-16 text-foreground">
-      <section className="space-y-2">
-        <p className="text-sm uppercase tracking-[0.3em] text-zinc-500">Welcome to</p>
-        <h1 className="text-4xl font-semibold leading-tight">deltaX</h1>
+    <div className="min-h-screen bg-slate-950">
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-cyan-500/10 bg-slate-950/70 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
+            <div className="relative h-10 w-10">
+              <Image src="/logo.png" alt="DeltaX Logo" fill className="object-contain" priority />
+            </div>
+            <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-lg font-semibold text-transparent">
+              DeltaX Dashboard
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isConnected && (
+              <Card className="flex items-center gap-2 bg-slate-900/50 px-4 py-2 text-cyan-200">
+                <Zap className="h-4 w-4 text-cyan-400" />
+                <span className="font-mono text-sm font-semibold">{points.toLocaleString()} PTS</span>
+              </Card>
+            )}
+
+            {isConnected ? (
+              <Button
+                onClick={handleDisconnect}
+                className="bg-slate-900/60 text-cyan-100 hover:bg-slate-800/80"
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                {walletAddress}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleConnect}
+                className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white"
+              >
+                <Wallet className="mr-2 h-4 w-4" />
+                지갑 연결
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* 여기가 새로 넣는 섹션 */}
+      <section className="mx-auto max-w-6xl px-4 pt-6">
+        <DashboardMiniChart />
       </section>
-      <p className="max-w-2xl text-base text-zinc-600 dark:text-zinc-300">
-        Start building by wiring up your app routes inside the <code>app</code> directory. Shared
-        utilities live under <code>lib</code>, and database schema belongs in <code>db/schema</code>
-        .
-      </p>
-    </main>
-  );
+
+      {/* Main Content */}
+      <main className="mx-auto flex max-w-6xl gap-6 px-4 py-8">
+        {/* Left: main sections */}
+        <div className="flex-1 space-y-6">
+          <AccountConnectCard
+            isConnected={isConnected}
+            walletAddress={walletAddress}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+          />
+
+          <RankingList />
+        </div>
+
+        {/* Right: points / quick actions */}
+        <div className="w-72 space-y-6">
+          <PointsPanel points={points} />
+          <Card className="bg-slate-900/40 p-4 text-slate-100">
+            <h3 className="mb-2 text-sm font-semibold text-slate-200">Quick Actions</h3>
+            <div className="flex flex-col gap-2">
+              <Button variant="outline" className="border-slate-700 bg-slate-900/30 text-slate-100">
+                오늘 라운드 참여
+              </Button>
+              <Button variant="outline" className="border-slate-700 bg-slate-900/30 text-slate-100">
+                NFT 상점 가기
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </main>
+    </div>
+  )
 }
