@@ -1,5 +1,9 @@
-import { initializeDb } from "@/db/client";
-import { CloudflareEnv } from "./types";
+import { initializeDb } from '@/db/client';
+import { CloudflareEnv } from './types';
+import * as schema from '@/db/schema';
+
+// Local fallback (Node runtime)
+let localDrizzle: any | null = null;
 
 /**
  * API 라우트에서 DB 클라이언트를 초기화합니다
@@ -16,13 +20,32 @@ import { CloudflareEnv } from "./types";
  * ```
  */
 export function getDbFromContext(context: any) {
-  const env = context.cloudflare?.env as CloudflareEnv;
+  const env = context.cloudflare?.env as CloudflareEnv | undefined;
 
-  if (!env || !env.DB) {
-    throw new Error(
-      "D1 database not available. Ensure your wrangler.toml is properly configured."
-    );
+  // 1) Cloudflare D1 바인딩이 있으면 D1로 연결
+  if (env?.DB) {
+    return initializeDb({ DB: env.DB });
   }
 
-  return initializeDb({ DB: env.DB });
+  // 2) 로컬 폴백: better-sqlite3로 로컬 SQLite 파일에 연결
+  if (localDrizzle) {
+    return localDrizzle;
+  }
+
+  // 동적 import로 엣지 번들 분리
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Database = require('better-sqlite3') as typeof import('better-sqlite3');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { drizzle } =
+    require('drizzle-orm/better-sqlite3') as typeof import('drizzle-orm/better-sqlite3');
+
+  // DATABASE_URL이 'file:./delta.db' 형태일 수 있어 전처리
+  const dbFile = process.env.DATABASE_URL?.replace(/^file:/, '') || 'delta.db';
+
+  const sqlite = new Database(dbFile);
+  localDrizzle = drizzle(sqlite, {
+    schema,
+    logger: process.env.NODE_ENV === 'development',
+  });
+  return localDrizzle;
 }
