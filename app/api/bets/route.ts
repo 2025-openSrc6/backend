@@ -6,6 +6,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { NextContext } from '@/lib/types';
 
 /**
+ * TODO(ehdnd): 베팅 기능 구현 예정
+ */
+
+/**
  * GET /api/bets?roundId=1
  * 라운드별 베팅 정보를 조회합니다
  *
