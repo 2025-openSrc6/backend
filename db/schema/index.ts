@@ -64,13 +64,9 @@ export type Bet = typeof bets.$inferSelect;
 export type NewBet = typeof bets.$inferInsert;
 
 // ==========================================
-// 차트 모듈 스키마 (김현준)
+// 차트 모듈 스키마 
 // ==========================================
 
-/**
- * ChartData - OHLCV 캔들스틱 데이터 저장
- * 실시간 및 과거 가격 데이터 관리
- */
 export const chartData = sqliteTable(
   "chart_data",
   {
@@ -103,8 +99,7 @@ export const chartData = sqliteTable(
 );
 
 /**
- * VolatilitySnapshot - 변동성 지표 스냅샷
- * 복잡한 계산 결과를 캐싱하여 API 응답 속도 향상
+ * VolatilitySnapshot - 변동성 지표
  */
 export const volatilitySnapshots = sqliteTable(
   "volatility_snapshots",
