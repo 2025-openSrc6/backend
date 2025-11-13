@@ -8,6 +8,7 @@ export type CloudflareEnv = {
 
 // Next.js API 요청 컨텍스트
 export type NextContext = {
+  params: Promise<Record<string, string>>;
   cloudflare?: {
     env: CloudflareEnv;
   };

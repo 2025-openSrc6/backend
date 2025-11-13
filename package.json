@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "analyze": "ANALYZE=true next build",
@@ -12,6 +12,12 @@
     "db:migrate": "npx wrangler d1 execute deltax-db --remote --file=drizzle/0000_natural_rictor.sql",
     "db:studio": "drizzle-kit studio",
     "db:seed": "npx wrangler d1 execute deltax-db --remote --file=scripts/seed.sql",
+    "db:migrate:local": "node scripts/migrate-local.mjs",
+    "db:dev:prepare": "npm run db:generate && npm run db:migrate:local",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare preview",
+    "cf:preview:remote": "opennextjs-cloudflare preview --remote",
+    "test": "node --test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
