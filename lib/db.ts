@@ -1,11 +1,16 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { initializeDb } from '@/db/client';
-import { CloudflareEnv, NextContext } from './types';
+import type { CloudflareEnv, NextContext } from './types';
 import * as schema from '@/db/schema';
 
-type DrizzleClient = ReturnType<typeof initializeDb>;
+type RemoteDrizzleClient = ReturnType<typeof initializeDb>;
+type BetterSqliteModule = typeof import('drizzle-orm/better-sqlite3');
+type LocalDrizzleClient = ReturnType<BetterSqliteModule['drizzle']>;
+type DbClient = RemoteDrizzleClient | LocalDrizzleClient;
 
-// Local fallback (Node runtime)
-let localDrizzle: DrizzleClient | null = null;
+const globalDbState = globalThis as typeof globalThis & {
+  __deltaxLocalDrizzle?: LocalDrizzleClient | null;
+};
 
 /**
  * API 라우트에서 DB 클라이언트를 초기화합니다
@@ -21,33 +26,48 @@ let localDrizzle: DrizzleClient | null = null;
  * }
  * ```
  */
-export function getDbFromContext(context: NextContext) {
-  const env = context.cloudflare?.env as CloudflareEnv | undefined;
+export function getDbFromContext(context: NextContext): DbClient {
+  const env = context.cloudflare?.env;
 
-  // 1) Cloudflare D1 바인딩이 있으면 D1로 연결
-  if (env?.DB) {
-    return initializeDb({ DB: env.DB });
+  const remoteDb = getCloudflareDrizzle(env);
+  if (remoteDb) {
+    return remoteDb;
   }
 
-  // 2) 로컬 폴백: better-sqlite3로 로컬 SQLite 파일에 연결
-  if (localDrizzle) {
-    return localDrizzle;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error("Cloudflare D1 database binding 'DB' is not available");
   }
 
-  // 동적 import로 엣지 번들 분리
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Database = require('better-sqlite3') as typeof import('better-sqlite3');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return getLocalDrizzle();
+}
+
+function getCloudflareDrizzle(env?: CloudflareEnv): RemoteDrizzleClient | null {
+  if (!env?.DB) {
+    return null;
+  }
+
+  return initializeDb({ DB: env.DB });
+}
+
+function getLocalDrizzle(): LocalDrizzleClient {
+  if (globalDbState.__deltaxLocalDrizzle) {
+    return globalDbState.__deltaxLocalDrizzle;
+  }
+
+  const betterSqliteModule = require('better-sqlite3') as typeof import('better-sqlite3');
+  const Database =
+    (betterSqliteModule as { default?: typeof betterSqliteModule }).default ?? betterSqliteModule;
   const { drizzle } =
     require('drizzle-orm/better-sqlite3') as typeof import('drizzle-orm/better-sqlite3');
 
-  // DATABASE_URL이 'file:./delta.db' 형태일 수 있어 전처리
-  const dbFile = process.env.DATABASE_URL?.replace(/^file:/, '') || 'delta.db';
-
+  const dbFile = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'delta.db';
   const sqlite = new Database(dbFile);
-  localDrizzle = drizzle(sqlite, {
+
+  globalDbState.__deltaxLocalDrizzle = drizzle(sqlite, {
     schema,
     logger: process.env.NODE_ENV === 'development',
-  }) as DrizzleClient;
-  return localDrizzle;
+  });
+
+  return globalDbState.__deltaxLocalDrizzle;
 }
+/* eslint-enable @typescript-eslint/no-require-imports */
