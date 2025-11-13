@@ -20,8 +20,6 @@
 # production
 /build
 
-# drizzle migration output
-/drizzle
 
 # sui move build artifacts
 /contracts/build
