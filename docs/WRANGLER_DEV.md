@@ -51,6 +51,8 @@ Wrangler가 표시하는 주소(예: `http://127.0.0.1:8787`)로 접속하면 `c
 
 > 참고: OpenNext는 Next 16을 정식 지원하므로 별도 peer dependency 충돌이 없습니다. 다만 빌드 시간이 길 수 있으니 평소에는 `npm run dev`로 빠르게 개발하고, Cloudflare 런타임 검증 시점에만 위 플로우를 사용하는 것을 권장합니다.
 
+CI나 네트워크가 막힌 환경에서 Google Fonts를 받지 못해 빌드가 실패한다면 `NEXT_FONT_GOOGLE_MOCKED_RESPONSES` 환경변수를 `scripts/mock-google-fonts.cjs`로 지정해 두면 됩니다. (GitHub Actions 워크플로에 이미 반영됨.)
+
 ---
 
 ## 4. 로컬 폴백 병행 전략
