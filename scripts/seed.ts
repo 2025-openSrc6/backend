@@ -17,33 +17,37 @@ async function seed() {
   try {
     // 라운드 추가
     console.log("\n📝 Adding rounds...");
-    const roundsData = [
+    const now = new Date();
+    const roundsData: typeof rounds.$inferInsert[] = [
       {
         roundKey: "round-2025-01-10-1h",
-        timeframe: "1h",
-        status: "scheduled" as const,
-        lockingStartsAt: new Date("2025-01-10T10:00:00Z"),
-        lockingEndsAt: new Date("2025-01-10T11:00:00Z"),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        type: "1HOUR",
+        status: "SCHEDULED",
+        startTime: new Date("2025-01-10T10:00:00Z"),
+        lockTime: new Date("2025-01-10T10:30:00Z"),
+        endTime: new Date("2025-01-10T11:00:00Z"),
+        createdAt: now,
+        updatedAt: now,
       },
       {
         roundKey: "round-2025-01-10-6h",
-        timeframe: "6h",
-        status: "scheduled" as const,
-        lockingStartsAt: new Date("2025-01-10T12:00:00Z"),
-        lockingEndsAt: new Date("2025-01-10T18:00:00Z"),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        type: "6HOUR",
+        status: "SCHEDULED",
+        startTime: new Date("2025-01-10T12:00:00Z"),
+        lockTime: new Date("2025-01-10T15:00:00Z"),
+        endTime: new Date("2025-01-10T18:00:00Z"),
+        createdAt: now,
+        updatedAt: now,
       },
       {
         roundKey: "round-2025-01-10-1d",
-        timeframe: "1d",
-        status: "active" as const,
-        lockingStartsAt: new Date("2025-01-09T00:00:00Z"),
-        lockingEndsAt: new Date("2025-01-10T00:00:00Z"),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        type: "1DAY",
+        status: "ACTIVE",
+        startTime: new Date("2025-01-09T00:00:00Z"),
+        lockTime: new Date("2025-01-09T12:00:00Z"),
+        endTime: new Date("2025-01-10T00:00:00Z"),
+        createdAt: now,
+        updatedAt: now,
       },
     ];
 
@@ -52,34 +56,38 @@ async function seed() {
 
     // 베팅 추가
     console.log("\n💰 Adding bets...");
-    const betsData = [
+    const betsData: typeof bets.$inferInsert[] = [
       {
         roundId: insertedRounds[0].id,
-        walletAddress: "0x1111111111111111111111111111111111111111",
-        selection: "gold" as const,
-        amount: 100.5,
-        createdAt: new Date(),
+        userAddress: "0x1111111111111111111111111111111111111111",
+        prediction: "GOLD",
+        amount: 100,
+        currency: "DEL",
+        createdAt: now,
       },
       {
         roundId: insertedRounds[0].id,
-        walletAddress: "0x2222222222222222222222222222222222222222",
-        selection: "btc" as const,
-        amount: 50.25,
-        createdAt: new Date(),
+        userAddress: "0x2222222222222222222222222222222222222222",
+        prediction: "BTC",
+        amount: 75,
+        currency: "DEL",
+        createdAt: now,
       },
       {
         roundId: insertedRounds[1].id,
-        walletAddress: "0x3333333333333333333333333333333333333333",
-        selection: "gold" as const,
-        amount: 200.0,
-        createdAt: new Date(),
+        userAddress: "0x3333333333333333333333333333333333333333",
+        prediction: "GOLD",
+        amount: 200,
+        currency: "DEL",
+        createdAt: now,
       },
       {
         roundId: insertedRounds[2].id,
-        walletAddress: "0x1111111111111111111111111111111111111111",
-        selection: "btc" as const,
-        amount: 75.75,
-        createdAt: new Date(),
+        userAddress: "0x4444444444444444444444444444444444444444",
+        prediction: "BTC",
+        amount: 50,
+        currency: "DEL",
+        createdAt: now,
       },
     ];
 
