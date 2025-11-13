@@ -38,7 +38,8 @@ export function getDbFromContext(context: NextContext) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require('better-sqlite3') as typeof import('better-sqlite3');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { drizzle } = require('drizzle-orm/better-sqlite3') as typeof import('drizzle-orm/better-sqlite3');
+  const { drizzle } =
+    require('drizzle-orm/better-sqlite3') as typeof import('drizzle-orm/better-sqlite3');
 
   // DATABASE_URL이 'file:./delta.db' 형태일 수 있어 전처리
   const dbFile = process.env.DATABASE_URL?.replace(/^file:/, '') || 'delta.db';
