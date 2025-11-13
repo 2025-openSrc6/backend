@@ -150,6 +150,8 @@ npm run db:migrate
 CF_D1_DB_NAME=my-db npm run db:migrate
 ```
 
+- Cloudflare 런타임에서 바로 테스트하고 싶다면 `docs/WRANGLER_DEV.md`의 흐름(Next → Cloudflare 번들 + `wrangler pages dev`)을 참고하세요.
+
 ---
 
 ### 7. 트러블슈팅
