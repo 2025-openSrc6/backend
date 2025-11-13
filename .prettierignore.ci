@@ -14,3 +14,6 @@ yarn.lock
 pnpm-lock.yaml
 .tmp
 coverage
+
+# Documentation
+docs/**
