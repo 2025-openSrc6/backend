@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "analyze": "ANALYZE=true next build",
@@ -17,6 +17,7 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare preview",
     "cf:preview:remote": "opennextjs-cloudflare preview --remote",
+    "test": "node --test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
