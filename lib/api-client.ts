@@ -31,10 +31,10 @@ type CreateBetPayload = {
  * 새로운 라운드를 생성합니다
  */
 export async function createRound(roundData: CreateRoundPayload) {
-  const response = await fetch("/api/rounds", {
-    method: "POST",
+  const response = await fetch('/api/rounds', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(roundData),
   });
@@ -50,8 +50,8 @@ export async function createRound(roundData: CreateRoundPayload) {
  * 모든 라운드를 조회합니다
  */
 export async function fetchRounds() {
-  const response = await fetch("/api/rounds", {
-    method: "GET",
+  const response = await fetch('/api/rounds', {
+    method: 'GET',
   });
 
   if (!response.ok) {
@@ -65,10 +65,10 @@ export async function fetchRounds() {
  * 새로운 베팅을 생성합니다
  */
 export async function createBet(betData: CreateBetPayload) {
-  const response = await fetch("/api/bets", {
-    method: "POST",
+  const response = await fetch('/api/bets', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(betData),
   });
@@ -84,13 +84,13 @@ export async function createBet(betData: CreateBetPayload) {
  * 특정 라운드의 베팅을 조회합니다
  */
 export async function fetchBets(roundId?: number) {
-  const url = new URL("/api/bets", window.location.origin);
+  const url = new URL('/api/bets', window.location.origin);
   if (roundId) {
-    url.searchParams.set("roundId", roundId.toString());
+    url.searchParams.set('roundId', roundId.toString());
   }
 
   const response = await fetch(url.toString(), {
-    method: "GET",
+    method: 'GET',
   });
 
   if (!response.ok) {
@@ -104,8 +104,8 @@ export async function fetchBets(roundId?: number) {
  * DB 연결 상태를 확인합니다
  */
 export async function checkHealth() {
-  const response = await fetch("/api/health", {
-    method: "GET",
+  const response = await fetch('/api/health', {
+    method: 'GET',
   });
 
   return (await response.json()) as ApiResponse<null>;

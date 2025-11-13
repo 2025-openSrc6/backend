@@ -1,105 +1,105 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Wallet, Zap } from "lucide-react"
-import { NFTCard } from "@/components/nft-card"
+import { useState } from 'react';
+import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Wallet, Zap } from 'lucide-react';
+import { NFTCard } from '@/components/nft-card';
 
 // Mock NFT data
 const nfts = [
   {
     id: 1,
-    name: "Cyber Dragon #001",
-    image: "/futuristic-cyber-dragon-nft-digital-art-neon.jpg",
+    name: 'Cyber Dragon #001',
+    image: '/futuristic-cyber-dragon-nft-digital-art-neon.jpg',
     price: 5000,
-    rarity: "Legendary",
-    description: "A legendary cyber dragon with neon scales",
+    rarity: 'Legendary',
+    description: 'A legendary cyber dragon with neon scales',
   },
   {
     id: 2,
-    name: "Neon Samurai #042",
-    image: "/neon-samurai-warrior-cyberpunk-nft-art.jpg",
+    name: 'Neon Samurai #042',
+    image: '/neon-samurai-warrior-cyberpunk-nft-art.jpg',
     price: 3500,
-    rarity: "Epic",
-    description: "Elite warrior from the neon districts",
+    rarity: 'Epic',
+    description: 'Elite warrior from the neon districts',
   },
   {
     id: 3,
-    name: "Pixel Phoenix #128",
-    image: "/pixel-art-phoenix-bird-fire-nft.jpg",
+    name: 'Pixel Phoenix #128',
+    image: '/pixel-art-phoenix-bird-fire-nft.jpg',
     price: 4200,
-    rarity: "Epic",
-    description: "Rising from digital ashes",
+    rarity: 'Epic',
+    description: 'Rising from digital ashes',
   },
   {
     id: 4,
-    name: "Quantum Tiger #007",
-    image: "/quantum-tiger-holographic-nft-digital-art.jpg",
+    name: 'Quantum Tiger #007',
+    image: '/quantum-tiger-holographic-nft-digital-art.jpg',
     price: 2800,
-    rarity: "Rare",
-    description: "Prowling through quantum dimensions",
+    rarity: 'Rare',
+    description: 'Prowling through quantum dimensions',
   },
   {
     id: 5,
-    name: "Holo Serpent #099",
-    image: "/holographic-serpent-snake-nft-futuristic.jpg",
+    name: 'Holo Serpent #099',
+    image: '/holographic-serpent-snake-nft-futuristic.jpg',
     price: 6500,
-    rarity: "Legendary",
-    description: "Slithering through holographic realms",
+    rarity: 'Legendary',
+    description: 'Slithering through holographic realms',
   },
   {
     id: 6,
-    name: "Cyber Wolf #256",
-    image: "/cyber-wolf-robot-nft-digital-art-neon.jpg",
+    name: 'Cyber Wolf #256',
+    image: '/cyber-wolf-robot-nft-digital-art-neon.jpg',
     price: 3000,
-    rarity: "Rare",
-    description: "Alpha of the digital pack",
+    rarity: 'Rare',
+    description: 'Alpha of the digital pack',
   },
   {
     id: 7,
-    name: "Neon Panther #512",
-    image: "/neon-panther-cat-cyberpunk-nft-art.jpg",
+    name: 'Neon Panther #512',
+    image: '/neon-panther-cat-cyberpunk-nft-art.jpg',
     price: 3800,
-    rarity: "Epic",
-    description: "Silent hunter of the neon jungle",
+    rarity: 'Epic',
+    description: 'Silent hunter of the neon jungle',
   },
   {
     id: 8,
-    name: "Plasma Eagle #333",
-    image: "/plasma-eagle-bird-electric-nft-digital.jpg",
+    name: 'Plasma Eagle #333',
+    image: '/plasma-eagle-bird-electric-nft-digital.jpg',
     price: 4500,
-    rarity: "Epic",
-    description: "Soaring through plasma storms",
+    rarity: 'Epic',
+    description: 'Soaring through plasma storms',
   },
-]
+];
 
 export function NFTShop() {
-  const [isConnected, setIsConnected] = useState(false)
-  const [walletAddress, setWalletAddress] = useState("")
-  const [userPoints, setUserPoints] = useState(15000)
+  const [isConnected, setIsConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [userPoints, setUserPoints] = useState(15000);
 
   const handleConnectWallet = () => {
     // Simulate wallet connection
-    setIsConnected(true)
-    setWalletAddress("0x742d...9f3a")
-  }
+    setIsConnected(true);
+    setWalletAddress('0x742d...9f3a');
+  };
 
   const handleDisconnectWallet = () => {
-    setIsConnected(false)
-    setWalletAddress("")
-  }
+    setIsConnected(false);
+    setWalletAddress('');
+  };
 
   const handlePurchase = (nftId: number, price: number) => {
     if (userPoints >= price) {
-      setUserPoints((prev) => prev - price)
+      setUserPoints((prev) => prev - price);
       // Here you would trigger the actual NFT minting
-      alert("NFT minted successfully! Check your wallet.")
+      alert('NFT minted successfully! Check your wallet.');
     } else {
-      alert("Insufficient points!")
+      alert('Insufficient points!');
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -109,13 +109,7 @@ export function NFTShop() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="relative w-16 h-16 flex-shrink-0">
-                <Image
-                  src="/logo.png"
-                  alt="DeltaX Logo"
-                  fill
-                  className="object-contain"
-                  priority
-                />
+                <Image src="/logo.png" alt="DeltaX Logo" fill className="object-contain" priority />
               </div>
               <h1 className="text-3xl font-black bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 bg-clip-text text-transparent drop-shadow-lg">
                 NFT SHOP
@@ -127,7 +121,9 @@ export function NFTShop() {
                 <Card className="px-4 py-2 bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/50 backdrop-blur-sm hover:border-cyan-400/80 transition-all duration-300 shadow-lg shadow-cyan-500/20">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-cyan-400 animate-pulse" />
-                    <span className="font-mono font-bold text-cyan-300">{userPoints.toLocaleString()}</span>
+                    <span className="font-mono font-bold text-cyan-300">
+                      {userPoints.toLocaleString()}
+                    </span>
                     <span className="text-sm text-cyan-200/60">PTS</span>
                   </div>
                 </Card>
@@ -223,5 +219,5 @@ export function NFTShop() {
         </div>
       </section>
     </div>
-  )
+  );
 }

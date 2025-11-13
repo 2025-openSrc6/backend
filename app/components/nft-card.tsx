@@ -1,54 +1,54 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import Image from "next/image"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Sparkles, Zap, Check } from "lucide-react"
+import { useState } from 'react';
+import Image from 'next/image';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Sparkles, Zap, Check } from 'lucide-react';
 
 interface NFT {
-  id: number
-  name: string
-  image: string
-  price: number
-  rarity: string
-  description: string
+  id: number;
+  name: string;
+  image: string;
+  price: number;
+  rarity: string;
+  description: string;
 }
 
 interface NFTCardProps {
-  nft: NFT
-  isConnected: boolean
-  userPoints: number
-  onPurchase: (nftId: number, price: number) => void
+  nft: NFT;
+  isConnected: boolean;
+  userPoints: number;
+  onPurchase: (nftId: number, price: number) => void;
 }
 
 export function NFTCard({ nft, isConnected, userPoints, onPurchase }: NFTCardProps) {
-  const [isHovered, setIsHovered] = useState(false)
-  const [isPurchasing, setIsPurchasing] = useState(false)
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
-  const canAfford = userPoints >= nft.price
+  const canAfford = userPoints >= nft.price;
 
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
-      case "Legendary":
-        return "bg-secondary/20 text-secondary border-secondary/30"
-      case "Epic":
-        return "bg-primary/20 text-primary border-primary/30"
-      case "Rare":
-        return "bg-accent/20 text-accent-foreground border-accent/30"
+      case 'Legendary':
+        return 'bg-secondary/20 text-secondary border-secondary/30';
+      case 'Epic':
+        return 'bg-primary/20 text-primary border-primary/30';
+      case 'Rare':
+        return 'bg-accent/20 text-accent-foreground border-accent/30';
       default:
-        return "bg-muted/20 text-muted-foreground border-muted/30"
+        return 'bg-muted/20 text-muted-foreground border-muted/30';
     }
-  }
+  };
 
   const handlePurchase = async () => {
-    setIsPurchasing(true)
+    setIsPurchasing(true);
     // Simulate minting delay
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    onPurchase(nft.id, nft.price)
-    setIsPurchasing(false)
-  }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    onPurchase(nft.id, nft.price);
+    setIsPurchasing(false);
+  };
 
   return (
     <Card
@@ -63,7 +63,7 @@ export function NFTCard({ nft, isConnected, userPoints, onPurchase }: NFTCardPro
         {/* Image container */}
         <div className="relative aspect-square overflow-hidden">
           <Image
-            src={nft.image || "/placeholder.svg"}
+            src={nft.image || '/placeholder.svg'}
             alt={nft.name}
             fill
             sizes="(max-width: 768px) 100vw, 400px"
@@ -84,7 +84,9 @@ export function NFTCard({ nft, isConnected, userPoints, onPurchase }: NFTCardPro
           {/* Hover overlay */}
           {isHovered && (
             <div className="absolute inset-0 bg-background/90 flex items-center justify-center transition-opacity duration-300">
-              <p className="text-sm text-muted-foreground px-4 text-center text-pretty">{nft.description}</p>
+              <p className="text-sm text-muted-foreground px-4 text-center text-pretty">
+                {nft.description}
+              </p>
             </div>
           )}
         </div>
@@ -95,7 +97,9 @@ export function NFTCard({ nft, isConnected, userPoints, onPurchase }: NFTCardPro
 
           <div className="flex items-center gap-2 mb-4">
             <Zap className="h-4 w-4 text-secondary" />
-            <span className="font-mono font-bold text-foreground">{nft.price.toLocaleString()}</span>
+            <span className="font-mono font-bold text-foreground">
+              {nft.price.toLocaleString()}
+            </span>
             <span className="text-sm text-muted-foreground">Points</span>
           </div>
         </div>
@@ -113,9 +117,9 @@ export function NFTCard({ nft, isConnected, userPoints, onPurchase }: NFTCardPro
               Minting...
             </>
           ) : !isConnected ? (
-            "Connect Wallet"
+            'Connect Wallet'
           ) : !canAfford ? (
-            "Insufficient Points"
+            'Insufficient Points'
           ) : (
             <>
               <Check className="mr-2 h-4 w-4" />
@@ -125,5 +129,5 @@ export function NFTCard({ nft, isConnected, userPoints, onPurchase }: NFTCardPro
         </Button>
       </CardFooter>
     </Card>
-  )
+  );
 }
