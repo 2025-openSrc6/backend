@@ -2,22 +2,35 @@
  * API 클라이언트 - 프론트엔드에서 DB 작업을 하기 위한 헬퍼
  */
 
+import type { Round } from '@/db/schema/rounds';
+import type { Bet } from '@/db/schema/bets';
+
 type ApiResponse<T> = {
   success: boolean;
   data?: T;
   error?: string;
 };
 
-/**
- * 새로운 라운드를 생성합니다
- */
-export async function createRound(roundData: {
+type CreateRoundPayload = {
   roundKey: string;
   timeframe: string;
   lockingStartsAt: string;
   lockingEndsAt: string;
   status?: string;
-}) {
+};
+
+type CreateBetPayload = {
+  roundId: number;
+  walletAddress: string;
+  selection: 'gold' | 'btc';
+  amount: string | number;
+  txDigest?: string;
+};
+
+/**
+ * 새로운 라운드를 생성합니다
+ */
+export async function createRound(roundData: CreateRoundPayload) {
   const response = await fetch("/api/rounds", {
     method: "POST",
     headers: {
@@ -30,7 +43,7 @@ export async function createRound(roundData: {
     throw new Error(`Failed to create round: ${response.statusText}`);
   }
 
-  return (await response.json()) as ApiResponse<any>;
+  return (await response.json()) as ApiResponse<Round | Round[]>;
 }
 
 /**
@@ -45,19 +58,13 @@ export async function fetchRounds() {
     throw new Error(`Failed to fetch rounds: ${response.statusText}`);
   }
 
-  return (await response.json()) as ApiResponse<any[]>;
+  return (await response.json()) as ApiResponse<Round[]>;
 }
 
 /**
  * 새로운 베팅을 생성합니다
  */
-export async function createBet(betData: {
-  roundId: number;
-  walletAddress: string;
-  selection: "gold" | "btc";
-  amount: string | number;
-  txDigest?: string;
-}) {
+export async function createBet(betData: CreateBetPayload) {
   const response = await fetch("/api/bets", {
     method: "POST",
     headers: {
@@ -70,7 +77,7 @@ export async function createBet(betData: {
     throw new Error(`Failed to create bet: ${response.statusText}`);
   }
 
-  return (await response.json()) as ApiResponse<any>;
+  return (await response.json()) as ApiResponse<Bet>;
 }
 
 /**
@@ -90,7 +97,7 @@ export async function fetchBets(roundId?: number) {
     throw new Error(`Failed to fetch bets: ${response.statusText}`);
   }
 
-  return (await response.json()) as ApiResponse<any[]>;
+  return (await response.json()) as ApiResponse<Bet[]>;
 }
 
 /**
