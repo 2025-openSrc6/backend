@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -61,10 +62,12 @@ export function NFTCard({ nft, isConnected, userPoints, onPurchase }: NFTCardPro
       <CardContent className="p-0 relative">
         {/* Image container */}
         <div className="relative aspect-square overflow-hidden">
-          <img
+          <Image
             src={nft.image || "/placeholder.svg"}
             alt={nft.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            fill
+            sizes="(max-width: 768px) 100vw, 400px"
+            className="object-cover transition-transform duration-500 group-hover:scale-110"
           />
 
           {/* Overlay gradient */}

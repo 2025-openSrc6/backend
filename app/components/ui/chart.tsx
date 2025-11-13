@@ -3,6 +3,11 @@
 import * as React from 'react'
 import * as RechartsPrimitive from 'recharts'
 import type { LegendPayload, TooltipContentProps } from 'recharts'
+import type {
+  NameType,
+  Payload,
+  ValueType,
+} from 'recharts/types/component/DefaultTooltipContent'
 
 import { cn } from '@/lib/utils'
 
@@ -103,6 +108,17 @@ ${colorConfig
   )
 }
 
+type ChartValueType = ValueType
+type ChartNameType = NameType
+type TooltipEntry = Payload<ChartValueType, ChartNameType>
+
+type ChartTooltipProps = Omit<
+  TooltipContentProps<ChartValueType, ChartNameType>,
+  'payload'
+> & {
+  payload?: TooltipEntry[]
+}
+
 const ChartTooltip = RechartsPrimitive.Tooltip
 
 function ChartTooltipContent({
@@ -119,7 +135,7 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-}: TooltipContentProps<number, string> &
+}: ChartTooltipProps &
   React.ComponentProps<'div'> & {
     hideLabel?: boolean
     hideIndicator?: boolean
@@ -169,7 +185,8 @@ function ChartTooltipContent({
     return null
   }
 
-  const nestLabel = payload.length === 1 && indicator !== 'dot'
+  const tooltipEntries = payload
+  const nestLabel = tooltipEntries.length === 1 && indicator !== 'dot'
 
   return (
     <div
@@ -180,14 +197,19 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {payload.map((item: any, index: number) => {
+        {tooltipEntries.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || 'value'}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
-          const indicatorColor = color || item.payload.fill || item.color
+          const payloadFill =
+            typeof item.payload === 'object' && item.payload !== null
+              ? (item.payload as { fill?: string }).fill
+              : undefined
+          const indicatorColor = color || payloadFill || item.color
+          const itemKey = String(item.dataKey ?? item.name ?? index)
 
           return (
             <div
-              key={item.dataKey}
+              key={itemKey}
               className={cn(
                 '[&>svg]:text-muted-foreground flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5',
                 indicator === 'dot' && 'items-center',
@@ -272,6 +294,8 @@ function ChartLegendContent({
     return null
   }
 
+  const legendItems = payload as LegendItems
+
   return (
     <div
       className={cn(
@@ -280,7 +304,7 @@ function ChartLegendContent({
         className,
       )}
     >
-      {payload.map((item: any) => {
+      {legendItems.map((item) => {
         const key = `${nameKey || item.dataKey || 'value'}`
         const itemConfig = getPayloadConfigFromPayload(config, item, key)
 

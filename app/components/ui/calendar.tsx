@@ -6,10 +6,44 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from 'lucide-react'
-import { DayButton, DayPicker, getDefaultClassNames } from 'react-day-picker'
+import {
+  DayButton,
+  DayPicker,
+  getDefaultClassNames,
+} from 'react-day-picker'
+import type { DayPickerProps } from 'react-day-picker'
 
 import { cn } from '@/lib/utils'
 import { Button, buttonVariants } from '@/components/ui/button'
+
+type CalendarRootProps = React.HTMLAttributes<HTMLDivElement> & {
+  rootRef?: React.Ref<HTMLDivElement>
+}
+
+type CalendarChevronProps = React.SVGAttributes<SVGSVGElement> & {
+  orientation?: 'left' | 'right' | 'up' | 'down'
+}
+
+const CalendarRoot = ({ className, rootRef, ...props }: CalendarRootProps) => (
+  <div
+    data-slot="calendar"
+    ref={rootRef}
+    className={cn(className)}
+    {...props}
+  />
+)
+
+const CalendarChevron = ({ className, orientation, ...props }: CalendarChevronProps) => {
+  if (orientation === 'left') {
+    return <ChevronLeftIcon className={cn('size-4', className)} {...props} />
+  }
+
+  if (orientation === 'right') {
+    return <ChevronRightIcon className={cn('size-4', className)} {...props} />
+  }
+
+  return <ChevronDownIcon className={cn('size-4', className)} {...props} />
+}
 
 function Calendar({
   className,
@@ -125,36 +159,14 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Root: ({ className, rootRef, ...props }: any) => {
-          return (
-            <div
-              data-slot="calendar"
-              ref={rootRef}
-              className={cn(className as string)}
-              {...props}
-            />
-          )
-        },
-        Chevron: ({ className, orientation, ...props }: any) => {
-          if (orientation === 'left') {
-            return (
-              <ChevronLeftIcon className={cn('size-4', className)} {...props} />
-            )
-          }
-
-          if (orientation === 'right') {
-            return (
-              <ChevronRightIcon
-                className={cn('size-4', className)}
-                {...props}
-              />
-            )
-          }
-
-          return (
-            <ChevronDownIcon className={cn('size-4', className)} {...props} />
-          )
-        },
+        Root: CalendarRoot as DayPickerProps['components'] extends { Root: infer T }
+          ? T
+          : never,
+        Chevron: CalendarChevron as DayPickerProps['components'] extends {
+          Chevron: infer T
+        }
+          ? T
+          : never,
         DayButton: CalendarDayButton,
         WeekNumber: ({ children, ...props }) => {
           return (
