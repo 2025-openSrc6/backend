@@ -64,86 +64,15 @@ sui
 
 ### DB
 
-postreSQL + drizzleORM
+cloudflare d1 (SQLite) + drizzleORM
 pinata
 redis
 
 ### deploy
 
-route53
-AWS S3 + CloudFront
+cloudflare workers and pages
 
 ### 아키텍쳐
-
-```mermaid
-graph TB
-    subgraph Client["🖥️ Client Layer"]
-        UI[React UI Components]
-        WalletSDK[@mysten/dapp-kit]
-        SuiJS[@mysten/sui.js]
-        WSClient[Socket.io Client]
-    end
-
-    subgraph Gateway["🚪 API Gateway"]
-        NextAPI[Next.js API Routes]
-        WSServer[WebSocket Server]
-    end
-
-    subgraph Logic["⚙️ Business Logic"]
-        BettingLogic[Betting System<br/>장태웅]
-        PriceAgg[Price Aggregator<br/>김현준]
-        RoundScheduler[Round Scheduler<br/>장태웅]
-        NFTLogic[NFT Logic<br/>김영민]
-        RankingLogic[Ranking System<br/>김도영]
-    end
-
-    subgraph Data["💾 Data Layer"]
-        PG[(PostgreSQL<br/>Users, Rounds, Bets)]
-        Redis[(Redis<br/>Cache, Real-time)]
-        SuiChain[Sui Blockchain<br/>NFTs, Betting Pool]
-        IPFS[Pinata IPFS<br/>NFT Metadata]
-    end
-
-    subgraph External["🌐 External Services"]
-        Kitco[Kitco API<br/>Gold Price]
-        CoinGecko[CoinGecko API<br/>BTC Price]
-        SuiRPC[Sui RPC Node]
-    end
-
-    UI --> NextAPI
-    UI --> WSClient
-    UI --> WalletSDK
-    WalletSDK --> SuiJS
-    WSClient --> WSServer
-
-    NextAPI --> BettingLogic
-    NextAPI --> NFTLogic
-    NextAPI --> RankingLogic
-    WSServer --> PriceAgg
-    WSServer --> BettingLogic
-
-    BettingLogic --> PG
-    BettingLogic --> Redis
-    BettingLogic --> SuiChain
-
-    PriceAgg --> Redis
-    PriceAgg --> PG
-    PriceAgg --> Kitco
-    PriceAgg --> CoinGecko
-
-    RoundScheduler --> BettingLogic
-    RoundScheduler --> PriceAgg
-
-    NFTLogic --> PG
-    NFTLogic --> SuiChain
-    NFTLogic --> IPFS
-
-    RankingLogic --> PG
-    RankingLogic --> Redis
-
-    SuiJS --> SuiRPC
-    SuiChain --> SuiRPC
-```
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -179,7 +108,6 @@ graph TB
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │          Price Aggregator (김현준)                       │  │
-│  │  - Kitco Poller  - CoinGecko Poller  - Data Normalizer  │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -192,7 +120,7 @@ graph TB
 ┌─────────────────────────────────────────────────────────────────┐
 │                       DATA LAYER                                │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
-│  │ PostgreSQL   │  │    Redis     │  │  Sui Chain   │         │
+│  │ SQLite       │  │    Redis     │  │  Sui Chain   │         │
 │  │              │  │              │  │              │         │
 │  │ - Users      │  │ - Prices     │  │ - NFTs       │         │
 │  │ - Rounds     │  │ - Round State│  │ - Bets Pool  │         │
@@ -209,10 +137,7 @@ graph TB
                               ↕
 ┌─────────────────────────────────────────────────────────────────┐
 │                  EXTERNAL SERVICES LAYER                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
-│  │  Kitco API   │  │CoinGecko API │  │ Sui RPC Node │         │
-│  │  (금 가격)   │  │  (BTC 가격)  │  │ (Blockchain) │         │
-│  └──────────────┘  └──────────────┘  └──────────────┘         │
+│  Sui                                                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -222,10 +147,10 @@ graph TB
 
 1. 1min 단위로 예측
    1. 고정 지급 방식 - 배당율 고정 (TBD %)
-2. 6hour 단위로 예측 (UTC+9)
+2. 6hour 단위로 예측 (UTC+9) (우선 구현)
    1. 라운드 진행
    2. 라운드 별 pool-betting
-   3. 02시, 08시, 14시, 20시 시작 (TBD)
+   3. 02시, 08시, 14시, 20시 시작
 3. 1day 단위로 예측
    1. 라운드 진행
    2. 라운드 별 pool-betting
