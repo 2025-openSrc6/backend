@@ -14,7 +14,7 @@ function findLatestSql(drizzleDir) {
 function main() {
   const drizzleDir = path.resolve(process.cwd(), 'drizzle');
   const latest = findLatestSql(drizzleDir);
-  const dbName = process.env.CF_D1_DB_NAME || 'deltax-db';
+  const dbName = process.env.CF_D1_DB_NAME || 'my-db-name';
 
   console.log(`[remote-migrate] Applying latest migration: ${latest}`);
   const cmd = `npx --yes wrangler d1 execute ${dbName} --remote --file="${latest}"`;

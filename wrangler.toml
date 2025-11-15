@@ -7,8 +7,8 @@ compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 directory = ".open-next/assets"
 binding = "ASSETS"
 
-# Cloudflare D1 Database 설정
+# Cloudflare D1 Database 설정 (일단 ehdnd db입니다)
 [[d1_databases]]
 binding = "DB"
-database_name = "deltax-db"
-database_id = "${CLOUDFLARE_D1_ID}"
+database_name = "my-db-name"
+database_id = "a0637bbd-181c-4c6e-b52d-85557e3a1e1c"

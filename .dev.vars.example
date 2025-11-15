@@ -1,16 +1,15 @@
-# Values here are loaded by `wrangler pages dev` for local Cloudflare bindings.
-# Copy this file to `.dev.vars` (which stays gitignored) and fill in the secrets.
+# Cloudflare 개발 환경 설정
+# 이 파일을 `.dev.vars`로 복사하고 실제 값을 입력하세요.
 
-# Cloudflare credentials (ask the infra owner)
-CLOUDFLARE_ACCOUNT_ID=
-CLOUDFLARE_API_TOKEN=
-CLOUDFLARE_D1_ID=
+# Cloudflare 계정 정보 (인프라 담당자에게 문의)
+CLOUDFLARE_ACCOUNT_ID=your-account-id-here
+CLOUDFLARE_API_TOKEN=your-api-token-here
 
-# Optional: other envs the app expects at runtime
+# Optional: 앱에서 필요한 기타 환경 변수
 SUI_NETWORK=testnet
 SUI_RPC_URL=https://fullnode.testnet.sui.io
 SUI_PACKAGE_ID=
 SUI_CAP_OBJECT_ID=
 
-# Local fallback DB path is still respected when running `npm run dev`
+# 로컬 개발 시 SQLite DB 경로
 DATABASE_URL=file:./delta.db
