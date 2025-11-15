@@ -543,7 +543,7 @@ Day 2: Cron Job 5 (Settlement Processor)
   - distribute_payout() 호출 (각 승자)
   - sui_payout_tx_hash 저장
 - [ ] D1 업데이트
-  - settlement_status = 'WON'/'REFUNDED'
+  - settlement_status = 'COMPLETED', result_status = 'WON'/'LOST'/'REFUNDED'
   - 유저 잔액 업데이트
 - [ ] 상태 전이
   - CALCULATING → SETTLED/VOIDED

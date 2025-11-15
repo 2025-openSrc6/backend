@@ -150,6 +150,8 @@ const prices = await getPrices();
              | UPDATE rounds SET
              |   gold_start_price = 2650.50,
              |   btc_start_price = 98234.00,
+             |   start_price_source = prices.source,
+             |   start_price_is_fallback = 0,
              |   price_snapshot_start_at = '2025-11-15T05:00:00.500Z',
              |   status = 'BETTING_OPEN'
              | WHERE id = ?
@@ -159,6 +161,8 @@ const prices = await getPrices();
 
 ```
 동일한 로직으로 gold_end_price, btc_end_price 저장
+  + end_price_source, end_price_is_fallback, end_price_fallback_reason 업데이트
+  + price_snapshot_end_at 기록
 ```
 
 ### 2.3 Fallback 정책 (API 실패 시)
@@ -171,6 +175,7 @@ const prices = await getPrices();
   → key: "price:gold:latest", "price:btc:latest"
   → TTL: 10분
 - 조건: 마지막 가격이 10분 이내
+- DB: start_price_is_fallback = 1, start_price_fallback_reason = 'REDIS_CACHE'
 - 경고 로그 기록: "Using fallback price (stale)"
 
 [옵션 B] 라운드 지연 시작
@@ -579,13 +584,19 @@ COMMIT;
 같은 정산 작업을 여러 번 실행해도 결과는 동일해야 함
 
 [구현]
-bets 테이블에 settlement_status 컬럼 추가:
+bets 테이블에 **정산 진행 상태**와 **결과 상태** 2개의 컬럼을 둔다:
 
-settlement_status:
+settlement_status (진행 상황):
   - PENDING: 정산 대기 (기본값)
   - PROCESSING: 정산 진행중
-  - COMPLETED: 정산 완료
+  - COMPLETED: 모든 온체인/오프체인 작업 완료
   - FAILED: 정산 실패 (재시도 필요)
+
+result_status (결과):
+  - PENDING: 아직 승패 결정 전
+  - WON / LOST: 승부 결정
+  - REFUNDED: 무효/환불
+  - FAILED: 결과 확정 불가 (수동 개입)
 ```
 
 **복구 로직:**
@@ -621,6 +632,11 @@ FOR EACH bet:
   3. Status 완료: PROCESSING → COMPLETED
      UPDATE bets SET
        settlement_status = 'COMPLETED',
+       result_status = CASE
+         WHEN round.winner = 'DRAW' THEN 'REFUNDED'
+         WHEN bet.prediction = round.winner THEN 'WON'
+         ELSE 'LOST'
+       END,
        payout = calculated_amount,
        settlement_tx_hash = tx_digest,
        settled_at = CURRENT_TIMESTAMP
@@ -768,6 +784,7 @@ ELSE:
    ↓
 7. [D1] 정산 완료 기록
    - bets.settlement_status = 'COMPLETED'
+   - bets.result_status = 'WON' / 'LOST' / 'REFUNDED'
    - rounds.status = 'SETTLED'
 ```
 
@@ -1059,6 +1076,7 @@ Job 5: Settlement Processor (큐 기반, 비동기)
     4. Sui Payout 전송 (각 승자에게)
     5. D1 업데이트:
        - bets.settlement_status = 'COMPLETED'
+       - bets.result_status = 'WON' (승자) / 'LOST' (패자) / 'REFUNDED' (무승부)
        - bets.payout = calculated_amount
        - rounds.status = 'SETTLED'
 

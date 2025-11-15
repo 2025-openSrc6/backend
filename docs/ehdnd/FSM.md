@@ -480,6 +480,7 @@ const payoutRatio = payoutPool / winningPool;
 4. 각 승자에게 Sui Payout 전송
 5. DB 업데이트:
    - bets.settlement_status = 'COMPLETED'
+   - bets.result_status = 'WON' / 'LOST'
    - bets.payout = calculated_amount
    - rounds.status = 'SETTLED'
 ```
@@ -491,7 +492,8 @@ const payoutRatio = payoutPool / winningPool;
 2. 전액 환불 계산 (수수료 없음)
 3. 각 베팅자에게 원금 반환
 4. DB 업데이트:
-   - bets.settlement_status = 'REFUNDED'
+   - bets.settlement_status = 'COMPLETED'
+   - bets.result_status = 'REFUNDED'
    - bets.payout = bet.amount (원금)
    - rounds.status = 'VOIDED'
    - rounds.void_reason = 'DRAW'
@@ -651,7 +653,8 @@ for (const bet of allBets) {
   await db
     .update(bets)
     .set({
-      settlement_status: 'REFUNDED',
+      settlement_status: 'COMPLETED',
+      result_status: 'REFUNDED',
       payout: bet.amount, // 원금 반환
       refunded_at: new Date(),
     })
@@ -760,7 +763,8 @@ for (const bet of allBets) {
   await db
     .update(bets)
     .set({
-      settlement_status: 'REFUNDED',
+      settlement_status: 'COMPLETED',
+      result_status: 'REFUNDED',
       payout: bet.amount, // 원금 그대로
       refunded_at: new Date(),
     })
