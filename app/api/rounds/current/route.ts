@@ -1,8 +1,15 @@
 import { getDbFromContext } from '@/lib/db';
 import { rounds } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { NextContext } from '@/lib/types';
+
+const ACTIVE_STATUSES = ['BETTING_OPEN', 'BETTING_LOCKED', 'PRICE_PENDING', 'CALCULATING'] as const;
+const STATUS_ALIAS: Record<string, (typeof ACTIVE_STATUSES)[number]> = {
+  OPEN: 'BETTING_OPEN',
+  ACTIVE: 'BETTING_OPEN',
+  LOCKED: 'BETTING_LOCKED',
+};
 
 /**
  * GET /api/rounds/current
@@ -18,15 +25,21 @@ export async function GET(request: NextRequest, context: NextContext) {
   try {
     const { searchParams } = request.nextUrl;
     const type = searchParams.get('type') || '6HOUR'; // 기본값 6시간
+    const statusParam = searchParams.get('status');
+    const normalizedStatus = statusParam ? (STATUS_ALIAS[statusParam] ?? statusParam) : undefined;
 
     // cloudeflare 바인딩이 있어야 동작한다?
     const db = getDbFromContext(context);
 
-    // OPEN 상태이고, 지정된 타입인 라운드 조회
+    // 활성 상태 라운드 또는 명시된 상태 라운드 조회
     const currentRound = await db
       .select()
       .from(rounds)
-      .where(and(eq(rounds.type, type), eq(rounds.status, 'OPEN')))
+      .where(
+        normalizedStatus
+          ? and(eq(rounds.type, type), eq(rounds.status, normalizedStatus))
+          : and(eq(rounds.type, type), inArray(rounds.status, ACTIVE_STATUSES)),
+      )
       .limit(1);
 
     if (currentRound.length === 0) {
