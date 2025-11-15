@@ -133,9 +133,15 @@ CREATE TABLE rounds (
   gold_end_price TEXT,                    -- 금 종료가
   btc_start_price TEXT,                   -- BTC 시작가 (USD, 예: "98234.00")
   btc_end_price TEXT,                     -- BTC 종료가
+  start_price_source TEXT CHECK (start_price_source IN ('kitco', 'coingecko', 'average', 'fallback', NULL)),
+  start_price_is_fallback INTEGER NOT NULL DEFAULT 0 CHECK (start_price_is_fallback IN (0, 1)),
+  start_price_fallback_reason TEXT,
+  end_price_source TEXT CHECK (end_price_source IN ('kitco', 'coingecko', 'average', 'fallback', NULL)),
+  end_price_is_fallback INTEGER NOT NULL DEFAULT 0 CHECK (end_price_is_fallback IN (0, 1)),
+  end_price_fallback_reason TEXT,
   price_snapshot_start_at INTEGER,        -- 시작 스냅샷 시각
   price_snapshot_end_at INTEGER,          -- 종료 스냅샷 시각
-  
+
   -- 변동률 (백분율, TEXT, 예: "1.125" = 1.125%)
   gold_change_percent TEXT,
   btc_change_percent TEXT,
@@ -182,6 +188,8 @@ CREATE UNIQUE INDEX idx_rounds_type_round_number ON rounds(type, round_number);
 **주요 필드 설명**
 - `status`: FSM.md에 정의된 8가지 상태
 - 가격은 `TEXT`로 저장하여 부동소수점 오차 방지
+- `start_price_source` / `end_price_source`: 가격 데이터 제공자
+- `*_is_fallback`, `*_fallback_reason`: Redis 캐시 사용, 지연 등 fallback 여부 판별
 - 모든 금액은 정수 (1 del = 1, 소수점 없음)
 
 ---
@@ -196,23 +204,28 @@ CREATE TABLE bets (
   id TEXT PRIMARY KEY,                    -- UUID v4
   round_id TEXT NOT NULL,                 -- 라운드 참조
   user_id TEXT NOT NULL,                  -- 유저 참조
-  
+
   -- 베팅 내용
   prediction TEXT NOT NULL CHECK (prediction IN ('GOLD', 'BTC')),
   amount INTEGER NOT NULL,                -- 베팅 금액
   currency TEXT NOT NULL CHECK (currency IN ('DEL', 'CRYSTAL')),
-  
-  -- 정산
+
+  -- 정산 결과
+  result_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (
+    result_status IN ('PENDING', 'WON', 'LOST', 'REFUNDED', 'FAILED')
+  ),
   settlement_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (
-    settlement_status IN ('PENDING', 'WON', 'LOST', 'REFUNDED', 'FAILED')
+    settlement_status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')
   ),
   payout_amount INTEGER DEFAULT 0,        -- 배당금 (승리 시)
-  
+
   -- Sui 통합
   sui_bet_object_id TEXT,                 -- Bet Object ID
   sui_tx_hash TEXT,                       -- 베팅 트랜잭션 해시
   sui_payout_tx_hash TEXT,                -- 정산 트랜잭션 해시
-  
+  sui_tx_timestamp INTEGER,               -- 베팅 트랜잭션 블록 타임
+  sui_payout_timestamp INTEGER,           -- 정산 트랜잭션 블록 타임
+
   -- 타임스탬프
   created_at INTEGER NOT NULL,            -- 베팅 요청 시각 (클라이언트)
   processed_at INTEGER NOT NULL,          -- 서버 처리 시각 (기준)
@@ -230,16 +243,29 @@ CREATE TABLE bets (
 CREATE INDEX idx_bets_round_id ON bets(round_id);
 CREATE INDEX idx_bets_user_id ON bets(user_id);
 CREATE INDEX idx_bets_settlement_status ON bets(settlement_status);
+CREATE INDEX idx_bets_result_status ON bets(result_status);
 CREATE INDEX idx_bets_created_at ON bets(created_at);
-CREATE INDEX idx_bets_user_round ON bets(user_id, round_id);
+CREATE UNIQUE INDEX idx_bets_user_round ON bets(user_id, round_id);
 ```
 
 **베팅 상태 흐름**
 ```
-PENDING → WON/LOST/REFUNDED
-         ↓ (실패 시)
-       FAILED (재시도 대기)
+settlement_status:  PENDING → PROCESSING → COMPLETED
+                                       ↓
+                                    FAILED (재시도)
+
+result_status:
+  - PENDING  (정산 시작 전)
+  - WON/LOST (승부 확정)
+  - REFUNDED (무효/취소)
+  - FAILED   (결과 확정 불가)
 ```
+
+**추가 메모**
+- `result_status`는 승/패 여부를 기록하며, `settlement_status`는 정산 파이프라인 진행 상황을 추적합니다.
+- `sui_tx_timestamp` / `sui_payout_timestamp`는 온체인 블록 타임(Unix timestamp)을 저장해 감사 용도로 활용합니다.
+- `(user_id, round_id)` UNIQUE 제약으로 동일 라운드 중복 베팅을 구조적으로 차단합니다.
+- 실서비스는 DEL 기준으로 운영하며, CRYSTAL을 사용할 경우에도 1:1 환산 금액을 `amount`에 기록한 뒤 `currency = 'CRYSTAL'`로 표기해 감사 추적만 유지합니다.
 
 ---
 
