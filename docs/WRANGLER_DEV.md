@@ -7,7 +7,7 @@
 ## 1. 필요한 CLI/계정
 
 - **Wrangler CLI**: devDependency로 포함되어 있으므로 `npx wrangler …`로 바로 실행할 수 있습니다. 최초 1회 `npx wrangler login`으로 계정 인증을 해야 합니다.
-- **Cloudflare 계정 정보**: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_D1_ID` (팀 리드에게 요청).
+- **Cloudflare 계정 정보**: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (팀 리드에게 요청). D1 Database ID는 이미 `wrangler.toml`에 설정되어 있습니다.
 - **Node 20 + npm 10**: 기존 프로젝트 요구사항과 동일.
 
 ---
@@ -22,10 +22,11 @@
    ```bash
    npm run db:migrate
    ```
-3. Wrangler 환경 변수 세팅 (dev 전용)
+3. 개발 환경 변수 설정 (선택사항)
    ```bash
    cp .dev.vars.example .dev.vars
-   # .dev.vars를 열어 CLOUDFLARE_* 값을 채웁니다
+   # .dev.vars를 열어 CLOUDFLARE_API_TOKEN 등 필요한 값을 채웁니다
+   # 주로 워커 런타임용 환경변수(SUI_NETWORK 등)를 설정합니다
    ```
 4. Cloudflare 로그인
    ```bash
@@ -66,7 +67,7 @@ CI나 네트워크가 막힌 환경에서 Google Fonts를 받지 못해 빌드�
 
 | 증상                                       | 확인 사항                                                                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `D1 database not available`                | `.dev.vars`의 `CLOUDFLARE_D1_ID`가 올바른지, `npm run cf:preview:remote`를 썼는지 확인 |
+| `D1 database not available`                | `wrangler.toml`의 `database_id`가 올바른지, `npm run cf:preview:remote`를 썼는지 확인 |
 | `wrangler dev`가 빌드 결과를 못 찾음       | `.open-next/` 폴더가 있는지, 직전에 `npm run cf:build`를 실행했는지 확인           |
 | Next 빌드가 오래 걸림                      | 잦은 수정이 필요하면 `npm run dev`로 작업하고, 체크포인트마다 `cf:build`/`cf:preview`를 실행 |
 | Cloudflare API 권한 오류                   | `npx wrangler login` 재실행 혹은 API Token 권한(D1 RW)을 확인                                     |
