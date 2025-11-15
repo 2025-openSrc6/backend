@@ -4,6 +4,13 @@ import { eq, desc, and } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { NextContext } from '@/lib/types';
 
+const STATUS_ALIAS: Record<string, string> = {
+  OPEN: 'BETTING_OPEN',
+  ACTIVE: 'BETTING_OPEN',
+  LOCKED: 'BETTING_LOCKED',
+  CLOSED: 'SETTLED',
+};
+
 /**
  * GET /api/rounds
  * 라운드를 조회합니다 (필터링 및 페이지네이션 지원)
@@ -31,7 +38,8 @@ export async function GET(request: NextRequest, context: NextContext) {
     }
 
     if (status) {
-      filters.push(eq(rounds.status, status));
+      const normalizedStatus = STATUS_ALIAS[status] ?? status;
+      filters.push(eq(rounds.status, normalizedStatus));
     }
 
     // 쿼리 실행

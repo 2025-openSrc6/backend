@@ -1,5 +1,5 @@
 import { getDbFromContext } from '@/lib/db';
-import { bets } from '@/db/schema';
+import { bets, users } from '@/db/schema';
 import type { NewBet } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest, context: NextContext) {
   try {
     const raw = (await request.json()) as Partial<NewBet> & {
       walletAddress?: string;
+      userAddress?: string;
       selection?: string;
       txDigest?: string;
     };
@@ -75,22 +76,31 @@ export async function POST(request: NextRequest, context: NextContext) {
     const db = getDbFromContext(context);
 
     // Backward-compatible field mapping
+    const providedUserId = raw.userId;
     const userAddress = raw.userAddress ?? raw.walletAddress;
-    const prediction = raw.prediction ?? (raw.selection ? raw.selection.toUpperCase() : undefined);
+    const prediction = raw.prediction
+      ? raw.prediction.toUpperCase()
+      : raw.selection
+        ? raw.selection.toUpperCase()
+        : undefined;
     const suiTxHash = raw.suiTxHash ?? raw.txDigest;
 
     // Required fields validation
-    if (
-      !raw.roundId ||
-      !userAddress ||
-      prediction === undefined ||
-      raw.amount === undefined ||
-      !raw.currency
-    ) {
+    if (!raw.roundId || prediction === undefined || raw.amount === undefined) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Missing required fields: roundId, userAddress, prediction, amount, currency',
+          error: 'Missing required fields: roundId, prediction, amount',
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!providedUserId && !userAddress) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Either userId or userAddress must be provided',
         },
         { status: 400 },
       );
@@ -107,15 +117,20 @@ export async function POST(request: NextRequest, context: NextContext) {
       );
     }
 
+    const userId = await resolveUserId(db, providedUserId, userAddress);
+
     const result = await db
       .insert(bets)
       .values({
         roundId: raw.roundId,
-        userAddress,
+        userId,
         prediction,
         amount: raw.amount,
-        currency: raw.currency,
+        currency: raw.currency ?? 'DEL',
         suiTxHash: suiTxHash || undefined,
+        suiBetObjectId: raw.suiBetObjectId,
+        settlementStatus: 'PENDING',
+        resultStatus: 'PENDING',
       })
       .returning();
 
@@ -136,4 +151,30 @@ export async function POST(request: NextRequest, context: NextContext) {
       { status: 500 },
     );
   }
+}
+
+async function resolveUserId(
+  db: ReturnType<typeof getDbFromContext>,
+  userId?: string,
+  userAddress?: string | null,
+) {
+  if (userId) return userId;
+  if (!userAddress) {
+    throw new Error('userAddress is required to create a new user');
+  }
+
+  const existing = await db.select().from(users).where(eq(users.suiAddress, userAddress)).limit(1);
+
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
+  const [created] = await db
+    .insert(users)
+    .values({
+      suiAddress: userAddress,
+    })
+    .returning();
+
+  return created.id;
 }
