@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { createBet } from '@/lib/api-client';
 
 interface BetFormProps {
-  roundId: number;
+  roundId: string;
   onSuccess?: () => void;
 }
 
