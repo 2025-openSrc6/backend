@@ -12,18 +12,30 @@ type ApiResponse<T> = {
 };
 
 type CreateRoundPayload = {
-  roundKey: string;
-  timeframe: string;
-  lockingStartsAt: string;
-  lockingEndsAt: string;
-  status?: string;
+  roundNumber: number;
+  type: '1MIN' | '6HOUR' | '1DAY';
+  startTime: string;
+  lockTime: string;
+  endTime: string;
+  status?:
+    | 'SCHEDULED'
+    | 'BETTING_OPEN'
+    | 'BETTING_LOCKED'
+    | 'PRICE_PENDING'
+    | 'CALCULATING'
+    | 'SETTLED'
+    | 'CANCELLED'
+    | 'VOIDED';
 };
 
 type CreateBetPayload = {
-  roundId: number;
-  walletAddress: string;
-  selection: 'gold' | 'btc';
+  roundId: string;
+  userId?: string;
+  userAddress?: string;
+  walletAddress?: string;
+  selection: 'gold' | 'btc' | 'GOLD' | 'BTC';
   amount: string | number;
+  currency?: 'DEL' | 'CRYSTAL';
   txDigest?: string;
 };
 
