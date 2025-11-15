@@ -18,11 +18,12 @@ export function RoundForm() {
       const formData = new FormData(e.currentTarget);
 
       const response = await createRound({
-        roundKey: formData.get('roundKey') as string,
-        timeframe: formData.get('timeframe') as string,
-        lockingStartsAt: formData.get('lockingStartsAt') as string,
-        lockingEndsAt: formData.get('lockingEndsAt') as string,
-        status: 'scheduled',
+        roundNumber: Number(formData.get('roundNumber')),
+        type: (formData.get('type') as '1MIN' | '6HOUR' | '1DAY') ?? '6HOUR',
+        startTime: new Date(formData.get('startTime') as string).toISOString(),
+        lockTime: new Date(formData.get('lockTime') as string).toISOString(),
+        endTime: new Date(formData.get('endTime') as string).toISOString(),
+        status: 'SCHEDULED',
       });
 
       if (response.success) {
@@ -44,42 +45,51 @@ export function RoundForm() {
       <h2 className="text-2xl font-bold">새 라운드 생성</h2>
 
       <div>
-        <label className="block text-sm font-medium">라운드 키</label>
+        <label className="block text-sm font-medium">라운드 번호</label>
         <input
-          type="text"
-          name="roundKey"
-          placeholder="round-2025-01-10-1h"
+          type="number"
+          min={1}
+          name="roundNumber"
+          placeholder="1"
           required
           className="w-full px-3 py-2 border rounded-md"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium">타임프레임</label>
-        <select name="timeframe" required className="w-full px-3 py-2 border rounded-md">
-          <option value="1m">1분</option>
-          <option value="5m">5분</option>
-          <option value="1h">1시간</option>
-          <option value="6h">6시간</option>
-          <option value="1d">1일</option>
+        <label className="block text-sm font-medium">라운드 타입</label>
+        <select name="type" required className="w-full px-3 py-2 border rounded-md">
+          <option value="1MIN">1분</option>
+          <option value="6HOUR">6시간</option>
+          <option value="1DAY">1일</option>
         </select>
       </div>
 
       <div>
-        <label className="block text-sm font-medium">잠금 시작 시간</label>
+        <label className="block text-sm font-medium">시작 시간</label>
         <input
           type="datetime-local"
-          name="lockingStartsAt"
+          name="startTime"
           required
           className="w-full px-3 py-2 border rounded-md"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium">잠금 종료 시간</label>
+        <label className="block text-sm font-medium">베팅 마감 시간</label>
         <input
           type="datetime-local"
-          name="lockingEndsAt"
+          name="lockTime"
+          required
+          className="w-full px-3 py-2 border rounded-md"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium">라운드 종료 시간</label>
+        <input
+          type="datetime-local"
+          name="endTime"
           required
           className="w-full px-3 py-2 border rounded-md"
         />
