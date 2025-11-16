@@ -51,7 +51,10 @@ export async function POST(request: NextRequest, context: NextContext) {
       // 변동성 계산
       const currentVolatility = calculateStdDev(recentPrices);
       const averageVolatility = calculateStdDev(closePrices);
-      const volatilityChangeRate = calculateVolatilityChangeRate(currentVolatility, averageVolatility);
+      const volatilityChangeRate = calculateVolatilityChangeRate(
+        currentVolatility,
+        averageVolatility,
+      );
       const volatilityScore = calculateVolatilityScore(volatilityChangeRate);
 
       // 게임성 지표
