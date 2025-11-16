@@ -64,7 +64,11 @@ export function calculateATR(data: OHLCData[], period: number = 14): number {
 
   const trueRanges = data.slice(1).map((item, index) => {
     const prevClose = data[index].close;
-    return Math.max(item.high - item.low, Math.abs(item.high - prevClose), Math.abs(item.low - prevClose));
+    return Math.max(
+      item.high - item.low,
+      Math.abs(item.high - prevClose),
+      Math.abs(item.low - prevClose),
+    );
   });
 
   const recentTR = trueRanges.slice(-period);
