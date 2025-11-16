@@ -77,4 +77,3 @@ export const volatilitySnapshots = sqliteTable(
 
 export type VolatilitySnapshot = typeof volatilitySnapshots.$inferSelect;
 export type NewVolatilitySnapshot = typeof volatilitySnapshots.$inferInsert;
-

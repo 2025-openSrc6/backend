@@ -75,10 +75,7 @@ export const chartData = sqliteTable(
   },
   (table) => ({
     /** 복합 인덱스: 특정 자산의 시간대별 조회 최적화 */
-    assetTimestampIdx: index('idx_chart_data_asset_timestamp').on(
-      table.asset,
-      table.timestamp,
-    ),
+    assetTimestampIdx: index('idx_chart_data_asset_timestamp').on(table.asset, table.timestamp),
     /** UNIQUE 제약: 동일 자산의 동일 시간대 데이터 중복 방지 */
     uniqueAssetTimestamp: uniqueIndex('idx_chart_data_unique_asset_timestamp').on(
       table.asset,
