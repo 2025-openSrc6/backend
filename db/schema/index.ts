@@ -6,3 +6,5 @@ export * from './settlements';
 export * from './pointTransactions';
 export * from './achievements';
 export * from './roundTransitions';
+export * from './chartData';
+export * from './volatilitySnapshots';
