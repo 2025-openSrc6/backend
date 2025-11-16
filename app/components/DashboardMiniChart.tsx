@@ -1,6 +1,6 @@
-"use client"
+'use client';
 
-import { Card } from "@/components/ui/card"
+import { Card } from '@/components/ui/card';
 
 export function DashboardMiniChart() {
   // 나중에 여기에 props로
@@ -74,5 +74,5 @@ export function DashboardMiniChart() {
         </div>
       </div>
     </Card>
-  )
+  );
 }

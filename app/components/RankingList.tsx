@@ -1,14 +1,14 @@
-"use client"
+'use client';
 
-import { Card } from "@/components/ui/card"
+import { Card } from '@/components/ui/card';
 
 const mockRanking = [
-  { rank: 1, name: "dy", volume: 42000 },
-  { rank: 2, name: "taeung", volume: 33500 },
-  { rank: 3, name: "arthur", volume: 29200 },
-  { rank: 4, name: "hyeonjun", volume: 20100 },
-  { rank: 5, name: "guest01", volume: 15000 },
-]
+  { rank: 1, name: 'dy', volume: 42000 },
+  { rank: 2, name: 'taeung', volume: 33500 },
+  { rank: 3, name: 'arthur', volume: 29200 },
+  { rank: 4, name: 'hyeonjun', volume: 20100 },
+  { rank: 5, name: 'guest01', volume: 15000 },
+];
 
 export function RankingList() {
   return (
@@ -29,10 +29,12 @@ export function RankingList() {
               </span>
               <span className="text-sm">{user.name}</span>
             </div>
-            <span className="text-sm font-mono text-cyan-200">{user.volume.toLocaleString()} pt</span>
+            <span className="text-sm font-mono text-cyan-200">
+              {user.volume.toLocaleString()} pt
+            </span>
           </li>
         ))}
       </ul>
     </Card>
-  )
+  );
 }
