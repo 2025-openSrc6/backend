@@ -1,29 +1,29 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import Image from "next/image"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Wallet, Zap } from "lucide-react"
-import { RankingList } from "@/components/RankingList"
-import { AccountConnectCard } from "@/components/AccountConnectCard"
-import { PointsPanel } from "@/components/PointsPanel"
-import { DashboardMiniChart } from "@/components/DashboardMiniChart"
+import { useState } from 'react';
+import Image from 'next/image';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Wallet, Zap } from 'lucide-react';
+import { RankingList } from '@/components/RankingList';
+import { AccountConnectCard } from '@/components/AccountConnectCard';
+import { PointsPanel } from '@/components/PointsPanel';
+import { DashboardMiniChart } from '@/components/DashboardMiniChart';
 
 export default function HomePage() {
-  const [isConnected, setIsConnected] = useState(false)
-  const [walletAddress, setWalletAddress] = useState("")
-  const [points, setPoints] = useState(12000)
+  const [isConnected, setIsConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [points, setPoints] = useState(12000);
 
   const handleConnect = () => {
-    setIsConnected(true)
-    setWalletAddress("0x742d...9f3a")
-  }
+    setIsConnected(true);
+    setWalletAddress('0x742d...9f3a');
+  };
 
   const handleDisconnect = () => {
-    setIsConnected(false)
-    setWalletAddress("")
-  }
+    setIsConnected(false);
+    setWalletAddress('');
+  };
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -43,7 +43,9 @@ export default function HomePage() {
             {isConnected && (
               <Card className="flex items-center gap-2 bg-slate-900/50 px-4 py-2 text-cyan-200">
                 <Zap className="h-4 w-4 text-cyan-400" />
-                <span className="font-mono text-sm font-semibold">{points.toLocaleString()} PTS</span>
+                <span className="font-mono text-sm font-semibold">
+                  {points.toLocaleString()} PTS
+                </span>
               </Card>
             )}
 
@@ -104,5 +106,5 @@ export default function HomePage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

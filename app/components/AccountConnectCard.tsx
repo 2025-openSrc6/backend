@@ -1,15 +1,15 @@
-"use client"
+'use client';
 
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Wallet } from "lucide-react"
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Wallet } from 'lucide-react';
 
 type Props = {
-  isConnected: boolean
-  walletAddress: string
-  onConnect: () => void
-  onDisconnect: () => void
-}
+  isConnected: boolean;
+  walletAddress: string;
+  onConnect: () => void;
+  onDisconnect: () => void;
+};
 
 export function AccountConnectCard({ isConnected, walletAddress, onConnect, onDisconnect }: Props) {
   return (
@@ -34,12 +34,15 @@ export function AccountConnectCard({ isConnected, walletAddress, onConnect, onDi
             연결 해제
           </Button>
         ) : (
-          <Button onClick={onConnect} className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white">
+          <Button
+            onClick={onConnect}
+            className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white"
+          >
             <Wallet className="mr-2 h-4 w-4" />
             지갑 연결
           </Button>
         )}
       </div>
     </Card>
-  )
+  );
 }
