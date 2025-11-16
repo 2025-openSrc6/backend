@@ -8,7 +8,7 @@ import { Wallet, Zap } from "lucide-react"
 import { RankingList } from "@/components/RankingList"
 import { AccountConnectCard } from "@/components/AccountConnectCard"
 import { PointsPanel } from "@/components/PointsPanel"
-import { DashboardMiniChart } from "@/components/DashboardMiniChart" // ← 이거 추가
+import { DashboardMiniChart } from "@/components/DashboardMiniChart"
 
 export default function HomePage() {
   const [isConnected, setIsConnected] = useState(false)
@@ -68,7 +68,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 여기가 새로 넣는 섹션 */}
+      {/* 목업 차트 */}
       <section className="mx-auto max-w-6xl px-4 pt-6">
         <DashboardMiniChart />
       </section>
