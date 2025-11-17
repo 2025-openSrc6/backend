@@ -31,12 +31,14 @@ Week 4: 12/06 ~ 12/12 (7일)
 ### 개발 원칙
 
 **1. 점진적 구현 (Incremental Development)**
+
 - Week 1: 블록체인 없이 Next.js 백엔드만 구현
 - Week 2: Sui 학습 및 기본 컨트랙트
 - Week 3: Next.js ↔ Sui 통합
 - Week 4: 정산 로직 및 테스트
 
 **2. 역할 분담 (Clear Boundaries)**
+
 ```
 태웅: 베팅 시스템, 라운드 관리, Sui 통합
 현준: 가격 데이터, 차트
@@ -45,6 +47,7 @@ Week 4: 12/06 ~ 12/12 (7일)
 ```
 
 **3. 통합 주기 (Integration Cadence)**
+
 - 매주 금요일: 통합 테스트 및 데모
 - 매일 저녁: 코드 리뷰 및 동기화
 
@@ -57,6 +60,7 @@ Week 4: 12/06 ~ 12/12 (7일)
 ### 1.1 Day 1-2 (11/15 ~ 11/16): 프로젝트 셋업
 
 **태웅**
+
 ```
 ✅ 완료 (현재 상태 기준)
 - [x] Next.js 14 프로젝트 초기화
@@ -75,6 +79,7 @@ Week 4: 12/06 ~ 12/12 (7일)
 ```
 
 **전체 팀**
+
 ```
 - [ ] 의존성 설치 및 개발 환경 설정
 - [ ] 프로젝트 문서 공유 (Notion/Slack)
@@ -86,6 +91,7 @@ Week 4: 12/06 ~ 12/12 (7일)
 ### 1.2 Day 3-4 (11/17 ~ 11/18): Core API 구현
 
 **태웅 (Rounds & Bets)**
+
 ```
 Priority 1: Rounds API
 - [ ] GET /api/rounds
@@ -115,6 +121,7 @@ Priority 2: Bets API (Mock)
 ```
 
 **현준 (Prices)**
+
 ```
 - [ ] lib/prices/fetcher.ts 구현
   - getPrices() 함수
@@ -129,6 +136,7 @@ Priority 2: Bets API (Mock)
 ```
 
 **도영 (Users & Points)**
+
 ```
 - [ ] GET /api/users/me
   - 세션 기반 유저 정보 조회
@@ -144,6 +152,7 @@ Priority 2: Bets API (Mock)
 ```
 
 **영민 (NFT & Shop)**
+
 ```
 - [ ] GET /api/nfts/shop
   - NFT 템플릿 목록
@@ -159,6 +168,7 @@ Priority 2: Bets API (Mock)
 ### 1.3 Day 5-6 (11/19 ~ 11/20): 라운드 FSM & Cron Jobs
 
 **태웅 (FSM 구현)**
+
 ```
 Priority 1: FSM 로직
 - [ ] lib/rounds/fsm.ts
@@ -190,6 +200,7 @@ Priority 2: Cron Job 스켈레톤
 ```
 
 **전체 팀**
+
 ```
 - [ ] API 통합 테스트
   - 각자 구현한 API 서로 호출
@@ -202,6 +213,7 @@ Priority 2: Cron Job 스켈레톤
 ### 1.4 Day 7 (11/21): Week 1 통합 & 데모
 
 **전체 팀**
+
 ```
 - [ ] 통합 테스트
   - 전체 플로우 시나리오 실행
@@ -217,6 +229,7 @@ Priority 2: Cron Job 스켈레톤
 ```
 
 **산출물**
+
 ```
 ✅ 동작하는 Next.js 백엔드 (Sui 제외)
 ✅ D1 스키마 완성
@@ -234,6 +247,7 @@ Priority 2: Cron Job 스켈레톤
 ### 2.1 Day 1-3 (11/22 ~ 11/24): Sui Move 학습
 
 **태웅 (Lead)**
+
 ```
 Day 1: 기초 학습
 - [ ] Sui 공식 문서 읽기
@@ -261,6 +275,7 @@ Day 2-3: 실전 코딩
 ```
 
 **전체 팀**
+
 ```
 - [ ] Sui 기초 학습 (각자 2시간)
   - Move Book 읽기
@@ -274,6 +289,7 @@ Day 2-3: 실전 코딩
 ### 2.2 Day 4-5 (11/25 ~ 11/26): 컨트랙트 완성
 
 **태웅**
+
 ```
 Priority 1: betting.move 완성
 - [ ] place_bet() 로직 완성
@@ -301,6 +317,7 @@ Priority 2: settlement.move 기초
 ```
 
 **영민 (NFT 컨트랙트 지원)**
+
 ```
 - [ ] nft.move 기초
   - NFT struct 정의
@@ -313,6 +330,7 @@ Priority 2: settlement.move 기초
 ### 2.3 Day 6-7 (11/27 ~ 11/28): Testnet 배포
 
 **태웅**
+
 ```
 Day 6: 배포 준비
 - [ ] Move.toml 설정
@@ -342,6 +360,7 @@ Day 7: Testnet 배포
 ```
 
 **산출물**
+
 ```
 ✅ del_coin.move (완성)
 ✅ betting.move (완성)
@@ -360,6 +379,7 @@ Day 7: Testnet 배포
 ### 3.1 Day 1-2 (11/29 ~ 11/30): Sui Client 설정
 
 **태웅**
+
 ```
 Day 1: Sui.js 통합
 - [ ] 의존성 설치
@@ -391,6 +411,7 @@ Day 2: API 업데이트
 ```
 
 **현준 (가격 데이터 실제 연동)**
+
 ```
 - [ ] Kitco API 실제 연동
   - API 키 발급
@@ -404,6 +425,7 @@ Day 2: API 업데이트
 ```
 
 **도영 (인증 시스템)**
+
 ```
 - [ ] Sui 지갑 기반 인증
   - POST /api/auth/session
@@ -419,6 +441,7 @@ Day 2: API 업데이트
 ### 3.2 Day 3-4 (12/01 ~ 12/02): 라운드 Cron with Sui
 
 **태웅**
+
 ```
 Day 3: Cron Job 2 (Round Opener)
 - [ ] 실제 가격 스냅샷
@@ -445,6 +468,7 @@ Day 4: Cron Job 3 (Betting Locker)
 ```
 
 **영민 (NFT Sui 통합)**
+
 ```
 - [ ] NFT 민팅 Sui 호출
   - mint_nft() 함수
@@ -460,6 +484,7 @@ Day 4: Cron Job 3 (Betting Locker)
 ### 3.3 Day 5-6 (12/03 ~ 12/04): WebSocket 실시간 업데이트
 
 **태웅**
+
 ```
 Day 5: WebSocket Server 구현
 - [ ] lib/websocket/server.ts
@@ -478,6 +503,7 @@ Day 6: 프론트엔드 통합
 ```
 
 **전체 팀**
+
 ```
 - [ ] WebSocket 이벤트 구독
   - 각자 담당 페이지에서
@@ -489,6 +515,7 @@ Day 6: 프론트엔드 통합
 ### 3.4 Day 7 (12/05): Week 3 통합 & 데모
 
 **전체 팀**
+
 ```
 - [ ] End-to-End 테스트
   - 라운드 생성 (Sui Pool)
@@ -502,6 +529,7 @@ Day 6: 프론트엔드 통합
 ```
 
 **산출물**
+
 ```
 ✅ Next.js ↔ Sui 완전 통합
 ✅ 실제 베팅 플로우 동작
@@ -519,6 +547,7 @@ Day 6: 프론트엔드 통합
 ### 4.1 Day 1-2 (12/06 ~ 12/07): 정산 로직 구현
 
 **태웅**
+
 ```
 Day 1: Cron Job 4 (Round Finalizer)
 - [ ] End Price 스냅샷
@@ -556,6 +585,7 @@ Day 2: Cron Job 5 (Settlement Processor)
 ```
 
 **현준 (가격 Fallback 구현)**
+
 ```
 - [ ] getPricesWithRetry() 함수
   - 최대 3회 재시도
@@ -571,6 +601,7 @@ Day 2: Cron Job 5 (Settlement Processor)
 ### 4.2 Day 3-4 (12/08 ~ 12/09): 복구 로직 & 에러 처리
 
 **태웅**
+
 ```
 Day 3: Recovery Job 구현
 - [ ] lib/recovery/queue.ts
@@ -597,6 +628,7 @@ Day 4: 에러 처리 강화
 ```
 
 **전체 팀**
+
 ```
 - [ ] 에러 시나리오 테스트
   - Sui RPC 타임아웃
@@ -610,6 +642,7 @@ Day 4: 에러 처리 강화
 ### 4.3 Day 5-6 (12/10 ~ 12/11): 통합 테스트 & 최적화
 
 **전체 팀**
+
 ```
 Day 5: 통합 테스트
 - [ ] 시나리오 기반 테스트
@@ -641,6 +674,7 @@ Day 6: 성능 최적화
 ### 4.4 Day 7 (12/12): 최종 데모 & 배포 준비
 
 **전체 팀**
+
 ```
 - [ ] 최종 통합 데모
   - 교수님/학생 대상
@@ -657,6 +691,7 @@ Day 6: 성능 최적화
 ```
 
 **산출물**
+
 ```
 ✅ 완전히 동작하는 베팅 시스템
 ✅ 정산 로직 완성
@@ -673,6 +708,7 @@ Day 6: 성능 최적화
 ### 장태웅 (베팅 시스템 & 라운드 관리)
 
 **핵심 책임**
+
 - 라운드 생성, 상태 관리 (FSM)
 - 베팅 API (POST /api/bets)
 - Cron Jobs (6개)
@@ -680,6 +716,7 @@ Day 6: 성능 최적화
 - Sui 통합 (Next.js ↔ Sui)
 
 **주요 산출물**
+
 - API: /rounds, /bets, /settlements
 - Cron: 라운드 생성/시작/마감/종료/정산
 - Move: betting.move, settlement.move, del_coin.move
@@ -690,12 +727,14 @@ Day 6: 성능 최적화
 ### 김현준 (가격 데이터 & 차트)
 
 **핵심 책임**
+
 - 실시간 가격 데이터 수집
 - 가격 스냅샷 (Start/End Price)
 - 차트 UI 구현
 - 가격 검증 및 Fallback
 
 **주요 산출물**
+
 - API: /prices/current
 - 함수: getPrices(), validatePrice()
 - UI: 금/BTC 차트 컴포넌트
@@ -706,12 +745,14 @@ Day 6: 성능 최적화
 ### 김도영 (메인 페이지 & 랭킹)
 
 **핵심 책임**
+
 - 메인 페이지 UI
 - 유저 랭킹 시스템
 - 출석 체크
 - 포인트 관리
 
 **주요 산출물**
+
 - API: /users, /points, /rankings
 - UI: 메인 대시보드, 랭킹 페이지
 - 출석 보상 로직
@@ -721,12 +762,14 @@ Day 6: 성능 최적화
 ### 김영민 (NFT & 샵)
 
 **핵심 책임**
+
 - NFT 민팅 및 관리
 - 상점 시스템
 - IPFS 업로드 (Pinata)
 - Sui NFT 통합
 
 **주요 산출물**
+
 - API: /nfts, /shop
 - Move: nft.move
 - UI: NFT 상점, 프로필
@@ -737,6 +780,7 @@ Day 6: 성능 최적화
 ## 마일스톤 및 체크포인트
 
 ### Milestone 1 (Week 1 종료)
+
 ```
 ✅ Next.js 백엔드 완성 (Sui 제외)
 ✅ D1 스키마 및 마이그레이션
@@ -746,12 +790,14 @@ Day 6: 성능 최적화
 ```
 
 **검증 방법**
+
 - Postman으로 전체 플로우 실행
 - D1 데이터 정합성 확인
 
 ---
 
 ### Milestone 2 (Week 2 종료)
+
 ```
 ✅ Sui Move 컨트랙트 작성
 ✅ Testnet 배포 완료
@@ -760,12 +806,14 @@ Day 6: 성능 최적화
 ```
 
 **검증 방법**
+
 - Sui Explorer에서 Package 확인
 - sui client call 테스트 성공
 
 ---
 
 ### Milestone 3 (Week 3 종료)
+
 ```
 ✅ Next.js ↔ Sui 완전 통합
 ✅ 실제 베팅 플로우 동작
@@ -774,6 +822,7 @@ Day 6: 성능 최적화
 ```
 
 **검증 방법**
+
 - E2E 테스트 (베팅 → 마감)
 - Sui 트랜잭션 확인
 - WebSocket 이벤트 수신
@@ -781,6 +830,7 @@ Day 6: 성능 최적화
 ---
 
 ### Milestone 4 (Week 4 종료)
+
 ```
 ✅ 정산 로직 완성
 ✅ 복구 및 에러 처리
@@ -789,6 +839,7 @@ Day 6: 성능 최적화
 ```
 
 **검증 방법**
+
 - 전체 플로우 (생성 → 정산) 성공
 - Jest 테스트 통과
 - 교수님 데모 시연
@@ -800,10 +851,12 @@ Day 6: 성능 최적화
 ### 리스크 1: Sui 학습 곡선
 
 **문제**
+
 - Move 언어가 생소함
 - Sui 생태계가 신생
 
 **완화 전략**
+
 - Week 2 전체를 학습에 할애
 - 태웅이 먼저 학습 후 팀 공유
 - 공식 문서 및 예제 적극 활용
@@ -814,10 +867,12 @@ Day 6: 성능 최적화
 ### 리스크 2: Sui Testnet 불안정
 
 **문제**
+
 - Testnet RPC가 간헐적으로 다운될 수 있음
 - 트랜잭션 실패율 증가
 
 **완화 전략**
+
 - 재시도 로직 필수 구현
 - Fallback RPC 엔드포인트 준비
 - 로컬 Sui 노드 실행 (비상용)
@@ -828,10 +883,12 @@ Day 6: 성능 최적화
 ### 리스크 3: 통합 지연
 
 **문제**
+
 - 팀원 간 API 인터페이스 불일치
 - 통합 시점에 버그 다수 발견
 
 **완화 전략**
+
 - Week 1부터 API 명세 확정 (API_SPECIFICATION.md)
 - 매일 저녁 코드 리뷰 및 동기화
 - 매주 금요일 통합 테스트 필수
@@ -842,10 +899,12 @@ Day 6: 성능 최적화
 ### 리스크 4: 가스비 고갈
 
 **문제**
+
 - Admin Wallet의 SUI 잔액 부족
 - Sponsored Transaction 실패
 
 **완화 전략**
+
 - Admin Wallet SUI 잔액 모니터링
 - 알림 시스템 구축 (잔액 < 100 SUI)
 - Testnet Faucet 주기적 요청
@@ -856,10 +915,12 @@ Day 6: 성능 최적화
 ### 리스크 5: 타임라인 초과
 
 **문제**
+
 - 예상보다 구현 시간 증가
 - 4주 내 완성 불가
 
 **완화 전략**
+
 - MVP 우선 (필수 기능만)
 - Nice-to-have 기능 후순위
   - 1분 라운드 → Week 5 이후
@@ -873,12 +934,12 @@ Day 6: 성능 최적화
 
 ### 4주 타임라인 요약
 
-| Week | 주요 목표                                  | 산출물                         |
-| ---- | ------------------------------------------ | ------------------------------ |
-| 1    | Next.js 백엔드 (Sui 제외)                  | 16개 API, Cron 스켈레톤        |
-| 2    | Sui Move 학습 & 컨트랙트                   | 배포된 Package, Move 테스트    |
-| 3    | Next.js ↔ Sui 통합                         | 실제 베팅 플로우, WebSocket    |
-| 4    | 정산 로직 & 테스트                         | 완성된 시스템, 최종 데모       |
+| Week | 주요 목표                 | 산출물                      |
+| ---- | ------------------------- | --------------------------- |
+| 1    | Next.js 백엔드 (Sui 제외) | 16개 API, Cron 스켈레톤     |
+| 2    | Sui Move 학습 & 컨트랙트  | 배포된 Package, Move 테스트 |
+| 3    | Next.js ↔ Sui 통합       | 실제 베팅 플로우, WebSocket |
+| 4    | 정산 로직 & 테스트        | 완성된 시스템, 최종 데모    |
 
 ### 핵심 성공 지표
 
@@ -893,6 +954,7 @@ Day 6: 성능 최적화
 ### 다음 단계 (Week 5 이후)
 
 **선택적 개선 사항**
+
 - 1분 라운드 구현
 - 1일 라운드 구현
 - 고급 NFT 효과
