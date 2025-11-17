@@ -1,9 +1,8 @@
-import { getDbFromContext } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import { NextContext } from '@/lib/types';
 
 const ROUND_TYPES = ['1MIN', '6HOUR', '1DAY'] as const;
 const ROUND_STATUSES = [
@@ -62,7 +61,7 @@ const MAX_PAGE_SIZE = 100;
  *   meta: { page, pageSize, total, totalPages }
  * }
  */
-export async function GET(request: NextRequest, context: NextContext) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
 
@@ -169,7 +168,7 @@ export async function GET(request: NextRequest, context: NextContext) {
     }
     const sortOrder: SortOrder = sortOrderCandidate;
 
-    const db = getDbFromContext(context);
+    const db = getDb();
     const whereClause = buildWhereClause(filters);
     const orderByExpression =
       sortOrder === 'asc' ? asc(SORTABLE_FIELDS[sortField]) : desc(SORTABLE_FIELDS[sortField]);
