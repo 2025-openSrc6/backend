@@ -16,7 +16,6 @@
 import { RoundRepository } from './repository';
 import { getRoundsQuerySchema } from './validation';
 import { ValidationError, NotFoundError } from '@/lib/shared/errors';
-import { STATUS_ALIAS, ROUND_STATUS_SET } from './constants';
 import type { GetRoundsResult, RoundStatus, Round, RoundQueryParams, RoundType } from './types';
 
 export class RoundService {
@@ -108,26 +107,6 @@ export class RoundService {
     }
 
     return round;
-  }
-
-  /**
-   * 상태 별칭 정규화
-   *
-   * 사용자 입력 (예: 'OPEN')을 정식 상태명 (예: 'BETTING_OPEN')으로 변환
-   *
-   * @param statusValue - 원본 상태 문자열
-   * @returns 정규화된 상태 또는 null
-   *
-   * @example
-   * normalizeStatus('OPEN') // → 'BETTING_OPEN'
-   * normalizeStatus('BETTING_OPEN') // → 'BETTING_OPEN'
-   * normalizeStatus('INVALID') // → null
-   */
-  normalizeStatus(statusValue: string): RoundStatus | null {
-    const upperValue = statusValue.toUpperCase();
-    const normalized = STATUS_ALIAS[upperValue] ?? upperValue;
-
-    return ROUND_STATUS_SET.has(normalized) ? (normalized as RoundStatus) : null;
   }
 
   /**
