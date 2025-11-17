@@ -14,7 +14,7 @@
 
 import { NextRequest } from 'next/server';
 import { registry } from '@/lib/registry';
-import { createSuccessResponseWithMeta, handleApiError } from '@/lib/shared/response';
+import { createSuccessResponse, createSuccessResponseWithMeta, handleApiError } from '@/lib/shared/response';
 
 /**
  * GET /api/rounds
@@ -54,6 +54,79 @@ export async function GET(request: NextRequest) {
     return createSuccessResponseWithMeta({ rounds: result.rounds }, result.meta);
   } catch (error) {
     // 4. 에러 처리 (Service 에러 → HTTP 응답)
+    return handleApiError(error);
+  }
+}
+
+/**
+ * POST /api/rounds
+ *
+ * 새 라운드를 생성합니다 (Admin 전용).
+ *
+ * Request Body:
+ * {
+ *   type: '6HOUR',           // 라운드 타입 (필수)
+ *   startTime: 1700000000    // 시작 시각 Unix timestamp 초 (필수)
+ * }
+ *
+ * 참고: endTime과 lockTime은 type에 따라 자동 계산됨
+ * - endTime = startTime + ROUND_DURATIONS[type]
+ * - lockTime = startTime + BETTING_DURATIONS[type]
+ *
+ * Response:
+ * {
+ *   success: true,
+ *   data: {
+ *     round: {
+ *       id: "uuid",
+ *       roundNumber: 43,      // 자동 증가
+ *       status: "SCHEDULED",  // 초기 상태
+ *       startTime: 1700000000,
+ *       endTime: 1700021600,  // 자동 계산
+ *       lockTime: 1700000060, // 자동 계산
+ *       // ... (전체 라운드 정보)
+ *     }
+ *   }
+ * }
+ *
+ * 에러 Response:
+ * {
+ *   success: false,
+ *   error: {
+ *     code: "DUPLICATE_ROUND" | "VALIDATION_ERROR" | ...,
+ *     message: "에러 메시지",
+ *     details?: { ... }
+ *   }
+ * }
+ *
+ * 권한: Admin 필요 (TODO: 인증 미들웨어 추가)
+ *
+ * 구현 로드맵: docs/ehdnd/POST_ROUNDS_IMPLEMENTATION.md 참고
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // 1. Request Body 파싱
+    const body = await request.json();
+
+    // TODO: 2. 권한 체크 (Admin 전용)
+    // const session = await getSession(request);
+    // if (!session || session.role !== 'ADMIN') {
+    //   throw new ForbiddenError('Admin role required');
+    // }
+
+    // 3. Service 호출 (registry에서 조립된 인스턴스 사용)
+    // Service에서 다음 작업 수행:
+    // - 입력 검증 (Zod)
+    // - endTime, lockTime 자동 계산
+    // - roundNumber 자동 증가
+    // - 중복 시간대 체크
+    // - DB 삽입
+    const round = await registry.roundService.createRound(body);
+
+    // 4. 성공 응답 반환
+    return createSuccessResponse({ round });
+  } catch (error) {
+    // 5. 에러 처리 (Service 에러 → HTTP 응답)
     return handleApiError(error);
   }
 }
