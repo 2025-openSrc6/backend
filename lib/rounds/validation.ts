@@ -15,6 +15,7 @@ import {
   MAX_PAGE_SIZE,
   DEFAULT_SORT_FIELD,
   DEFAULT_SORT_ORDER,
+  DEFAULT_ROUND_TYPE,
 } from './constants';
 
 /**
@@ -36,11 +37,7 @@ export const getRoundsQuerySchema = z.object({
   statuses: z.array(z.enum(ROUND_STATUSES as [string, ...string[]])).optional(),
 
   // 페이지 번호 (1 이상, 기본값 1)
-  page: z.coerce
-    .number()
-    .int()
-    .min(1, 'Page must be at least 1')
-    .default(DEFAULT_PAGE),
+  page: z.coerce.number().int().min(1, 'Page must be at least 1').default(DEFAULT_PAGE),
 
   // 페이지 크기 (1~100, 기본값 20)
   pageSize: z.coerce
@@ -51,9 +48,7 @@ export const getRoundsQuerySchema = z.object({
     .default(DEFAULT_PAGE_SIZE),
 
   // 정렬 필드 (기본값 start_time)
-  sort: z
-    .enum(SORTABLE_FIELDS as [string, ...string[]])
-    .default(DEFAULT_SORT_FIELD),
+  sort: z.enum(SORTABLE_FIELDS as [string, ...string[]]).default(DEFAULT_SORT_FIELD),
 
   // 정렬 순서 (기본값 desc)
   order: z.enum(['asc', 'desc']).default(DEFAULT_SORT_ORDER),
@@ -77,3 +72,19 @@ export const uuidSchema = z.string().uuid('Invalid UUID format');
  * POST /api/rounds 등에서 사용
  */
 export const unixTimestampSchema = z.number().int().positive();
+
+/**
+ * GET /api/rounds/current 검증 스키마
+ *
+ * @example
+ * const validated = getCurrentRoundQuerySchema.parse({
+ *   type: '6HOUR',
+ * });
+ */
+export const getCurrentRoundQuerySchema = z.object({
+  type: z.enum(ROUND_TYPES as [string, ...string[]], {
+    message: `type must be one of: ${ROUND_TYPES.join(', ')}`,
+  }),
+});
+
+export type ValidatedGetCurrentRoundQuery = z.infer<typeof getCurrentRoundQuerySchema>;
