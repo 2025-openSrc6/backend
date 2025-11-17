@@ -14,7 +14,7 @@
  */
 
 import { RoundRepository } from './repository';
-import { getRoundsQuerySchema } from './validation';
+import { getCurrentRoundQuerySchema, getRoundsQuerySchema } from './validation';
 import { ValidationError, NotFoundError } from '@/lib/shared/errors';
 import type { GetRoundsResult, RoundStatus, Round, RoundQueryParams, RoundType } from './types';
 
@@ -109,6 +109,65 @@ export class RoundService {
     return round;
   }
 
+  async getCurrentRound(rawType: unknown): Promise<
+    Round & {
+      timeRemaining: number;
+      bettingTimeRemaining: number;
+      goldBetsPercentage: string;
+      btcBetsPercentage: string;
+      canBet: boolean;
+      bettingClosesIn: string;
+    }
+  > {
+    // 1. 입력 검증 (Zod)
+    const validated = getCurrentRoundQuerySchema.parse({ type: rawType });
+    const type = validated.type as RoundType;
+
+    // 2. Repository 호출 - DB 쿼리
+    const round = await this.repository.findCurrentRound(type);
+    if (!round) {
+      throw new NotFoundError('Current active round', type);
+    }
+
+    // UI용 필드 계산
+    const now = Math.floor(Date.now() / 1000); // Unix timestamp (초)
+
+    // Date를 Unix timestamp (초)로 변환
+    const endTimeSeconds = Math.floor(round.endTime.getTime() / 1000);
+    const lockTimeSeconds = Math.floor(round.lockTime.getTime() / 1000);
+
+    // 시간 계산
+    const timeRemaining = Math.max(0, endTimeSeconds - now);
+    const bettingTimeRemaining = Math.max(0, lockTimeSeconds - now);
+
+    // 베팅 비율 계산
+    const totalPool = round.totalPool ?? 0;
+    const totalGoldBets = round.totalGoldBets ?? 0;
+    const totalBtcBets = round.totalBtcBets ?? 0;
+
+    const goldBetsPercentage =
+      totalPool > 0 ? ((totalGoldBets / totalPool) * 100).toFixed(2) : '0.00';
+    const btcBetsPercentage =
+      totalPool > 0 ? ((totalBtcBets / totalPool) * 100).toFixed(2) : '0.00';
+
+    // 베팅 가능 여부
+    const canBet = round.status === 'BETTING_OPEN' && now < lockTimeSeconds;
+
+    // MM:SS 형식 변환
+    const bettingClosesIn = this.formatTimeMMSS(bettingTimeRemaining);
+
+    // 5. 결과 반환
+    return {
+      ...round,
+      timeRemaining,
+      bettingTimeRemaining,
+      goldBetsPercentage,
+      btcBetsPercentage,
+      canBet,
+      bettingClosesIn,
+    };
+  }
+
   /**
    * UUID 형식 검증 (간단한 정규식)
    *
@@ -117,5 +176,15 @@ export class RoundService {
   private isValidUuid(uuid: string): boolean {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(uuid);
+  }
+
+  /**
+   * 초를 MM:SS 형식으로 변환
+   * @private
+   */
+  private formatTimeMMSS(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 }

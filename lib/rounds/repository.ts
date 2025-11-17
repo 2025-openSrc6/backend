@@ -16,7 +16,7 @@ import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import type { Round, RoundQueryParams } from './types';
+import type { Round, RoundQueryParams, RoundType } from './types';
 
 export class RoundRepository {
   /**
@@ -53,6 +53,31 @@ export class RoundRepository {
     }
 
     return query.orderBy(orderByExpression).limit(limit).offset(offset);
+  }
+
+  /**
+   * 현재 활성 라운드 조회
+   *
+   * "활성"의 정의: BETTING_OPEN 또는 BETTING_LOCKED 상태
+   * 가장 최근에 시작한 라운드를 반환
+   *
+   * @param type - 라운드 타입
+   * @returns 현재 활성 라운드 또는 undefined
+   *
+   * @example
+   * const round = await repo.findCurrentRound('6HOUR');
+   */
+  async findCurrentRound(type: RoundType): Promise<Round | undefined> {
+    const db = getDb();
+
+    const result = await db
+      .select()
+      .from(rounds)
+      .where(and(eq(rounds.type, type), inArray(rounds.status, ['BETTING_OPEN', 'BETTING_LOCKED'])))
+      .orderBy(desc(rounds.startTime))
+      .limit(1);
+
+    return result[0];
   }
 
   /**

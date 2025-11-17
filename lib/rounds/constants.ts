@@ -12,6 +12,8 @@ import type { RoundType, RoundStatus, RoundSortField } from './types';
  */
 export const ROUND_TYPES: readonly RoundType[] = ['1MIN', '6HOUR', '1DAY'] as const;
 
+export const DEFAULT_ROUND_TYPE: RoundType = '6HOUR';
+
 /**
  * 모든 라운드 상태 목록
  */
