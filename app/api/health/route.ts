@@ -1,12 +1,12 @@
 import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /**
  * GET /api/health
  * DB 연결 상태를 확인합니다
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const db = getDb();
 

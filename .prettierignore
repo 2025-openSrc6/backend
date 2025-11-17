@@ -4,6 +4,7 @@ out
 build
 .open-next
 next-env.d.ts
+.wrangler
 
 # Dependencies
 node_modules
