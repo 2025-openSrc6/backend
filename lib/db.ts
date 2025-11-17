@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { initializeDb } from '@/db/client';
-import type { CloudflareEnv, NextContext } from './types';
 import * as schema from '@/db/schema';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { cache } from 'react';
+import type { D1Database } from '@cloudflare/workers-types';
 
 type RemoteDrizzleClient = ReturnType<typeof initializeDb>;
 type BetterSqliteModule = typeof import('drizzle-orm/better-sqlite3');
@@ -14,22 +16,21 @@ const globalDbState = globalThis as typeof globalThis & {
 
 /**
  * API 라우트에서 DB 클라이언트를 초기화합니다
+ * 요청당 새로운 클라이언트를 생성합니다 (Cloudflare Workers 권장 패턴)
  *
  * @example
  * ```typescript
- * import { getDbFromContext } from "@/lib/db";
+ * import { getDb } from "@/lib/db";
  *
- * export async function GET(request: Request, context: any) {
- *   const db = getDbFromContext(context);
+ * export async function GET(request: Request) {
+ *   const db = getDb();
  *   const rounds = await db.select().from(rounds);
  *   return Response.json(rounds);
  * }
  * ```
  */
-export function getDbFromContext(context: NextContext): DbClient {
-  const env = context.cloudflare?.env;
-
-  const remoteDb = getCloudflareDrizzle(env);
+export const getDb = cache((): DbClient => {
+  const remoteDb = getCloudflareDrizzle();
   if (remoteDb) {
     return remoteDb;
   }
@@ -39,14 +40,20 @@ export function getDbFromContext(context: NextContext): DbClient {
   }
 
   return getLocalDrizzle();
-}
+});
 
-function getCloudflareDrizzle(env?: CloudflareEnv): RemoteDrizzleClient | null {
-  if (!env?.DB) {
+function getCloudflareDrizzle(): RemoteDrizzleClient | null {
+  try {
+    const { env } = getCloudflareContext();
+    const db = (env as any).DB as D1Database | undefined;
+    if (!db) {
+      return null;
+    }
+    return initializeDb({ DB: db });
+  } catch (error) {
+    // Cloudflare context가 없는 경우 (로컬 개발 환경)
     return null;
   }
-
-  return initializeDb({ DB: env.DB });
 }
 
 function getLocalDrizzle(): LocalDrizzleClient {
