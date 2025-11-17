@@ -1,9 +1,8 @@
-import { getDbFromContext } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { bets, users } from '@/db/schema';
 import type { NewBet } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
-import type { NextContext } from '@/lib/types';
 
 /**
  * TODO(ehdnd): 베팅 기능 구현 예정
@@ -19,12 +18,12 @@ import type { NextContext } from '@/lib/types';
  * Response: { success: true, data: Bet[] }
  * ```
  */
-export async function GET(request: NextRequest, context: NextContext) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
     const roundId = searchParams.get('roundId'); // UUID(string)
 
-    const db = getDbFromContext(context);
+    const db = getDb();
 
     const allBets = roundId
       ? await db.select().from(bets).where(eq(bets.roundId, roundId))
@@ -64,7 +63,7 @@ export async function GET(request: NextRequest, context: NextContext) {
  * }
  * ```
  */
-export async function POST(request: NextRequest, context: NextContext) {
+export async function POST(request: NextRequest) {
   try {
     const raw = (await request.json()) as Partial<NewBet> & {
       walletAddress?: string;
@@ -73,7 +72,7 @@ export async function POST(request: NextRequest, context: NextContext) {
       txDigest?: string;
     };
 
-    const db = getDbFromContext(context);
+    const db = getDb();
 
     // Backward-compatible field mapping
     const providedUserId = raw.userId;
@@ -154,7 +153,7 @@ export async function POST(request: NextRequest, context: NextContext) {
 }
 
 async function resolveUserId(
-  db: ReturnType<typeof getDbFromContext>,
+  db: ReturnType<typeof getDb>,
   userId?: string,
   userAddress?: string | null,
 ) {

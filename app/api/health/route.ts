@@ -1,15 +1,14 @@
-import { getDbFromContext } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
-import { NextContext } from '@/lib/types';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/health
  * DB 연결 상태를 확인합니다
  */
-export async function GET(request: NextRequest, context: NextContext) {
+export async function GET(request: NextRequest) {
   try {
-    const db = getDbFromContext(context);
+    const db = getDb();
 
     // 간단한 쿼리로 DB 연결 테스트
     await db.select().from(rounds).limit(1);
