@@ -10,6 +10,10 @@ type BetterSqliteModule = typeof import('drizzle-orm/better-sqlite3');
 type LocalDrizzleClient = ReturnType<BetterSqliteModule['drizzle']>;
 type DbClient = RemoteDrizzleClient | LocalDrizzleClient;
 
+interface CloudflareEnv {
+  DB: D1Database;
+}
+
 const globalDbState = globalThis as typeof globalThis & {
   __deltaxLocalDrizzle?: LocalDrizzleClient | null;
 };
@@ -45,12 +49,12 @@ export const getDb = cache((): DbClient => {
 function getCloudflareDrizzle(): RemoteDrizzleClient | null {
   try {
     const { env } = getCloudflareContext();
-    const db = (env as any).DB as D1Database | undefined;
+    const db = (env as CloudflareEnv).DB as D1Database | undefined;
     if (!db) {
       return null;
     }
     return initializeDb({ DB: db });
-  } catch (error) {
+  } catch {
     // Cloudflare context가 없는 경우 (로컬 개발 환경)
     return null;
   }
