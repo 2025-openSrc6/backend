@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ServiceError,
   NotFoundError,
   ValidationError,
@@ -137,7 +138,7 @@ export function handleApiError(error: unknown): NextResponse {
 
   // 400 - Zod Validation Error
   if (error instanceof ZodError) {
-    return createErrorResponse(400, 'VALIDATION_ERROR', 'Invalid input', (error as any).errors);
+    return createErrorResponse(400, 'VALIDATION_ERROR', 'Invalid input', error.issues);
   }
 
   // 500 - Unknown Error

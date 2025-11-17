@@ -5,13 +5,10 @@
       "Bash(npm run build:*)",
       "Bash(npm run db:generate:*)",
       "Bash(npm uninstall:*)",
-      "Bash(if exist c:2025-openSrc6backenddrizzle0000_natural_rictor.sql del c:2025-openSrc6backenddrizzle0000_natural_rictor.sql)",
       "Bash(grep:*)",
-      "Bash(rm:*)",
       "Bash(git check-ignore:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

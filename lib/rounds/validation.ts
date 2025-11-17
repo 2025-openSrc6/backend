@@ -15,7 +15,6 @@ import {
   MAX_PAGE_SIZE,
   DEFAULT_SORT_FIELD,
   DEFAULT_SORT_ORDER,
-  DEFAULT_ROUND_TYPE,
 } from './constants';
 
 /**
