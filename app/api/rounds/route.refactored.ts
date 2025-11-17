@@ -23,7 +23,7 @@ import { createSuccessResponseWithMeta, handleApiError } from '@/lib/shared/resp
  *
  * Query Parameters:
  * - type: '1MIN' | '6HOUR' | '1DAY' (선택)
- * - status: RoundStatus 또는 alias (선택, 콤마/다중 파라미터 허용)
+ * - status: RoundStatus (선택, 콤마/다중 파라미터 허용)
  * - page: 페이지 번호 (기본: 1)
  * - pageSize: 페이지 크기 (기본: 20, 최대: 100)
  * - sort: 'start_time' | 'round_number' (기본: start_time)
@@ -72,19 +72,14 @@ function parseQueryParams(request: NextRequest) {
   const { searchParams } = request.nextUrl;
 
   // status 파라미터는 콤마 구분 또는 복수 파라미터 지원
-  // 예: ?status=OPEN,LOCKED 또는 ?status=OPEN&status=LOCKED
+  // 예: ?status=BETTING_OPEN,BETTING_LOCKED 또는 ?status=BETTING_OPEN&status=BETTING_LOCKED
   const rawStatusValues = searchParams
     .getAll('status')
     .flatMap((value) => value.split(','))
     .map((value) => value.trim())
     .filter(Boolean);
 
-  // 상태 별칭 정규화는 Service에서 수행
-  const statuses = rawStatusValues.length > 0
-    ? rawStatusValues
-        .map((value) => registry.roundService.normalizeStatus(value))
-        .filter(Boolean)
-    : undefined;
+  const statuses = rawStatusValues.length > 0 ? rawStatusValues : undefined;
 
   return {
     type: searchParams.get('type') ?? undefined,

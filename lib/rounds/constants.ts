@@ -39,22 +39,6 @@ export const ROUND_STATUS_SET = new Set<string>(ROUND_STATUSES);
 export const SORTABLE_FIELD_SET = new Set<string>(SORTABLE_FIELDS);
 
 /**
- * 상태 별칭 (사용자 편의)
- *
- * 쿼리 파라미터에서 OPEN → BETTING_OPEN 등으로 변환
- *
- * @example
- * GET /api/rounds?status=OPEN
- * → BETTING_OPEN으로 변환
- */
-export const STATUS_ALIAS: Record<string, RoundStatus> = {
-  OPEN: 'BETTING_OPEN',
-  ACTIVE: 'BETTING_OPEN',
-  LOCKED: 'BETTING_LOCKED',
-  CLOSED: 'SETTLED',
-};
-
-/**
  * 페이지네이션 기본값
  */
 export const DEFAULT_PAGE = 1;
