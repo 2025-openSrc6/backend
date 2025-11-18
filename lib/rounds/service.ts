@@ -14,9 +14,18 @@
  */
 
 import { RoundRepository } from './repository';
-import { getCurrentRoundQuerySchema, getRoundsQuerySchema } from './validation';
-import { ValidationError, NotFoundError } from '@/lib/shared/errors';
-import type { GetRoundsResult, RoundStatus, Round, RoundQueryParams, RoundType } from './types';
+import { createRoundSchema, getCurrentRoundQuerySchema, getRoundsQuerySchema } from './validation';
+import { ValidationError, NotFoundError, BusinessRuleError } from '@/lib/shared/errors';
+import { getDb, type DbClient } from '@/lib/db';
+import type {
+  GetRoundsResult,
+  RoundStatus,
+  Round,
+  RoundInsert,
+  RoundQueryParams,
+  RoundType,
+} from './types';
+import { BETTING_DURATIONS_MS, ROUND_DURATIONS_MS } from './constants';
 
 export class RoundService {
   private repository: RoundRepository;
@@ -130,15 +139,11 @@ export class RoundService {
     }
 
     // UI용 필드 계산
-    const now = Math.floor(Date.now() / 1000); // Unix timestamp (초)
+    const now = Date.now(); // Epoch milliseconds
 
-    // Date를 Unix timestamp (초)로 변환
-    const endTimeSeconds = Math.floor(round.endTime.getTime() / 1000);
-    const lockTimeSeconds = Math.floor(round.lockTime.getTime() / 1000);
-
-    // 시간 계산
-    const timeRemaining = Math.max(0, endTimeSeconds - now);
-    const bettingTimeRemaining = Math.max(0, lockTimeSeconds - now);
+    // 시간 계산 (초 단위로 표시)
+    const timeRemaining = Math.max(0, Math.floor((round.endTime - now) / 1000));
+    const bettingTimeRemaining = Math.max(0, Math.floor((round.lockTime - now) / 1000));
 
     // 베팅 비율 계산
     const totalPool = round.totalPool ?? 0;
@@ -151,7 +156,7 @@ export class RoundService {
       totalPool > 0 ? ((totalBtcBets / totalPool) * 100).toFixed(2) : '0.00';
 
     // 베팅 가능 여부
-    const canBet = round.status === 'BETTING_OPEN' && now < lockTimeSeconds;
+    const canBet = round.status === 'BETTING_OPEN' && now < round.lockTime;
 
     // MM:SS 형식 변환
     const bettingClosesIn = this.formatTimeMMSS(bettingTimeRemaining);
@@ -166,6 +171,64 @@ export class RoundService {
       canBet,
       bettingClosesIn,
     };
+  }
+
+  // Service에서 다음 작업 수행:
+  // - 입력 검증 (Zod)
+  // - endTime, lockTime 자동 계산
+  // - roundNumber 자동 증가
+  // - 중복 시간대 체크
+  // - DB 삽입
+  async createRound(rawParams: unknown): Promise<Round> {
+    // 1. 입력 검증 (Zod)
+    const validated = createRoundSchema.parse(rawParams);
+
+    // 2. 시간 계산
+    const startTime = validated.startTime;
+    const type = validated.type as RoundType;
+
+    const roundDurationMs = ROUND_DURATIONS_MS[type];
+    const bettingDurationMs = BETTING_DURATIONS_MS[type];
+
+    const endTime = startTime + roundDurationMs;
+    const lockTime = startTime + bettingDurationMs;
+
+    // 3. 트랜잭션으로 원자적 처리 (중복 체크 + roundNumber 증가 + 삽입)
+    const db = getDb();
+
+    return db.transaction(async (tx: DbClient) => {
+      // 3-1. 중복 시간대 체크 (트랜잭션 내에서 실행)
+      const isOverlapping = await this.repository.checkOverlappingTime(type, startTime, tx);
+      if (isOverlapping) {
+        throw new BusinessRuleError(
+          'ROUND_TIME_OVERLAP',
+          'A round already exists for this time period',
+          {
+            startTime,
+            endTime,
+          },
+        );
+      }
+
+      // 3-2. 마지막 roundNumber 조회 (트랜잭션 내에서 실행)
+      const lastRoundNumber = await this.repository.getLastRoundNumber(type, tx);
+      const roundNumber = lastRoundNumber + 1;
+
+      // 3-3. 라운드 객체 생성
+      const roundData: RoundInsert = {
+        id: crypto.randomUUID(),
+        roundNumber,
+        type,
+        status: 'SCHEDULED',
+        startTime,
+        endTime,
+        lockTime,
+        // 나머지 필드는 기본값 (생략)
+      };
+
+      // 3-4. 라운드 삽입
+      return await this.repository.insert(roundData, tx);
+    });
   }
 
   /**

@@ -8,7 +8,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 type RemoteDrizzleClient = ReturnType<typeof initializeDb>;
 type BetterSqliteModule = typeof import('drizzle-orm/better-sqlite3');
 type LocalDrizzleClient = ReturnType<BetterSqliteModule['drizzle']>;
-type DbClient = RemoteDrizzleClient | LocalDrizzleClient;
+export type DbClient = RemoteDrizzleClient | LocalDrizzleClient;
 
 interface CloudflareEnv {
   DB: D1Database;

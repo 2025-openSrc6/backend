@@ -66,7 +66,7 @@ export type ValidatedGetRoundsQuery = z.infer<typeof getRoundsQuerySchema>;
 export const uuidSchema = z.string().uuid('Invalid UUID format');
 
 /**
- * Unix timestamp 검증 스키마 (초 단위)
+ * Epoch milliseconds 검증 스키마
  *
  * POST /api/rounds 등에서 사용
  */
@@ -87,3 +87,23 @@ export const getCurrentRoundQuerySchema = z.object({
 });
 
 export type ValidatedGetCurrentRoundQuery = z.infer<typeof getCurrentRoundQuerySchema>;
+
+/**
+ * POST /api/rounds Request Body 검증 스키마
+ *
+ * @example
+ * const validated = createRoundSchema.parse({
+ *   type: '6HOUR',
+ *   startTime: 1700000000000,  // Epoch milliseconds
+ * });
+ */
+export const createRoundSchema = z.object({
+  type: z.enum(ROUND_TYPES as [string, ...string[]], {
+    message: `type must be one of: ${ROUND_TYPES.join(', ')}`,
+  }),
+  startTime: z.number().int().positive({
+    message: 'startTime must be a positive Epoch milliseconds',
+  }),
+});
+
+export type ValidatedCreateRound = z.infer<typeof createRoundSchema>;
