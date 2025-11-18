@@ -28,15 +28,15 @@ async function seed() {
 
     // 라운드 추가
     console.log('\n📝 Adding rounds...');
-    const now = new Date();
+    const now = Date.now(); // Epoch milliseconds
     const roundsData: (typeof rounds.$inferInsert)[] = [
       {
         roundNumber: 1,
         type: '6HOUR',
         status: 'SCHEDULED',
-        startTime: new Date('2025-01-10T10:00:00Z'),
-        lockTime: new Date('2025-01-10T10:01:00Z'),
-        endTime: new Date('2025-01-10T16:00:00Z'),
+        startTime: new Date('2025-01-10T10:00:00Z').getTime(),
+        lockTime: new Date('2025-01-10T10:01:00Z').getTime(),
+        endTime: new Date('2025-01-10T16:00:00Z').getTime(),
         createdAt: now,
         updatedAt: now,
       },
@@ -44,9 +44,9 @@ async function seed() {
         roundNumber: 2,
         type: '6HOUR',
         status: 'BETTING_OPEN',
-        startTime: new Date('2025-01-10T12:00:00Z'),
-        lockTime: new Date('2025-01-10T12:01:00Z'),
-        endTime: new Date('2025-01-10T18:00:00Z'),
+        startTime: new Date('2025-01-10T12:00:00Z').getTime(),
+        lockTime: new Date('2025-01-10T12:01:00Z').getTime(),
+        endTime: new Date('2025-01-10T18:00:00Z').getTime(),
         createdAt: now,
         updatedAt: now,
       },
@@ -54,9 +54,9 @@ async function seed() {
         roundNumber: 3,
         type: '1DAY',
         status: 'BETTING_LOCKED',
-        startTime: new Date('2025-01-09T00:00:00Z'),
-        lockTime: new Date('2025-01-09T00:01:00Z'),
-        endTime: new Date('2025-01-10T00:00:00Z'),
+        startTime: new Date('2025-01-09T00:00:00Z').getTime(),
+        lockTime: new Date('2025-01-09T00:01:00Z').getTime(),
+        endTime: new Date('2025-01-10T00:00:00Z').getTime(),
         createdAt: now,
         updatedAt: now,
       },
@@ -74,7 +74,7 @@ async function seed() {
         prediction: 'GOLD',
         amount: 100,
         currency: 'DEL',
-        createdAt: now,
+        createdAt: Date.now(),
       },
       {
         roundId: insertedRounds[0].id,
@@ -82,7 +82,7 @@ async function seed() {
         prediction: 'BTC',
         amount: 75,
         currency: 'DEL',
-        createdAt: now,
+        createdAt: Date.now(),
       },
       {
         roundId: insertedRounds[1].id,
@@ -90,7 +90,7 @@ async function seed() {
         prediction: 'GOLD',
         amount: 200,
         currency: 'DEL',
-        createdAt: now,
+        createdAt: Date.now(),
       },
       {
         roundId: insertedRounds[2].id,
@@ -98,7 +98,7 @@ async function seed() {
         prediction: 'BTC',
         amount: 50,
         currency: 'DEL',
-        createdAt: now,
+        createdAt: Date.now(),
       },
     ];
 
