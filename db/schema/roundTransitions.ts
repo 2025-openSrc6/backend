@@ -31,10 +31,10 @@ export const roundTransitions = sqliteTable(
     /** 부가 메타데이터 (JSON string) */
     metadata: text('metadata'),
 
-    /** 전이 발생 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 전이 발생 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
   },
   (table) => ({
     roundIdx: index('idx_round_transitions_round_id').on(table.roundId),

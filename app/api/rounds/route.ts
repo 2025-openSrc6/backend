@@ -65,8 +65,8 @@ export async function GET(request: NextRequest) {
  *
  * Request Body:
  * {
- *   type: '6HOUR',           // 라운드 타입 (필수)
- *   startTime: 1700000000    // 시작 시각 Unix timestamp 초 (필수)
+ *   type: '6HOUR',              // 라운드 타입 (필수)
+ *   startTime: 1700000000000    // 시작 시각 Epoch milliseconds (필수)
  * }
  *
  * 참고: endTime과 lockTime은 type에 따라 자동 계산됨
@@ -79,11 +79,11 @@ export async function GET(request: NextRequest) {
  *   data: {
  *     round: {
  *       id: "uuid",
- *       roundNumber: 43,      // 자동 증가
- *       status: "SCHEDULED",  // 초기 상태
- *       startTime: 1700000000,
- *       endTime: 1700021600,  // 자동 계산
- *       lockTime: 1700000060, // 자동 계산
+ *       roundNumber: 43,         // 자동 증가
+ *       status: "SCHEDULED",     // 초기 상태
+ *       startTime: 1700000000000,
+ *       endTime: 1700021600000,  // 자동 계산
+ *       lockTime: 1700000060000, // 자동 계산
  *       // ... (전체 라운드 정보)
  *     }
  *   }

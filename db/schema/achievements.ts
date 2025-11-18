@@ -49,13 +49,13 @@ export const achievements = sqliteTable(
     /** 기타 속성 (JSON string) */
     properties: text('properties'),
 
-    /** 획득 시각 */
-    acquiredAt: integer('acquired_at', { mode: 'timestamp' }).notNull(),
+    /** 획득 시각 (Epoch milliseconds) */
+    acquiredAt: integer('acquired_at', { mode: 'number' }).notNull(),
 
-    /** 생성 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 생성 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
   },
   (table) => ({
     userIdx: index('idx_achievements_user_id').on(table.userId),

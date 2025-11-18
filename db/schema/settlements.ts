@@ -49,16 +49,16 @@ export const settlements = sqliteTable(
     /** Sui Settlement Object ID */
     suiSettlementObjectId: text('sui_settlement_object_id', { length: 100 }),
 
-    /** 배당 계산 완료 시각 */
-    calculatedAt: integer('calculated_at', { mode: 'timestamp' }).notNull(),
+    /** 배당 계산 완료 시각 (Epoch milliseconds) */
+    calculatedAt: integer('calculated_at', { mode: 'number' }).notNull(),
 
-    /** 정산 트랜잭션 완료 시각 */
-    completedAt: integer('completed_at', { mode: 'timestamp' }),
+    /** 정산 트랜잭션 완료 시각 (Epoch milliseconds) */
+    completedAt: integer('completed_at', { mode: 'number' }),
 
-    /** 레코드 생성 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 레코드 생성 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
   },
   (table) => ({
     roundUnique: uniqueIndex('idx_settlements_round_id').on(table.roundId),
