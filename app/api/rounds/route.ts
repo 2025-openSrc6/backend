@@ -14,7 +14,11 @@
 
 import { NextRequest } from 'next/server';
 import { registry } from '@/lib/registry';
-import { createSuccessResponse, createSuccessResponseWithMeta, handleApiError } from '@/lib/shared/response';
+import {
+  createSuccessResponse,
+  createSuccessResponseWithMeta,
+  handleApiError,
+} from '@/lib/shared/response';
 
 /**
  * GET /api/rounds

@@ -17,7 +17,6 @@ import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Round, RoundInsert, RoundQueryParams, RoundType } from './types';
-import { ROUND_DURATIONS_MS } from './constants';
 
 export class RoundRepository {
   /**
@@ -140,16 +139,25 @@ export class RoundRepository {
    *
    * 두 구간이 겹치는지 확인:
    * - 기존 라운드: [rounds.startTime, rounds.endTime]
-   * - 새 라운드: [startTime, startTime + duration]
+   * - 새 라운드: [startTime, endTime]
    *
+   * 겹치는 조건: NOT (완전히 분리됨)
+   * - 완전히 분리: (new.end <= old.start) OR (new.start >= old.end)
+   * - 겹침: NOT (완전히 분리)
+   *
+   * @param startTime - 새 라운드 시작 시간 (Epoch milliseconds)
+   * @param endTime - 새 라운드 종료 시간 (Epoch milliseconds)
    * @param type - 라운드 타입
-   * @param startTime - 라운드 시작 시간 (Unix timestamp, 밀리초)
    * @param tx - 트랜잭션 (옵셔널, 제공되면 트랜잭션 내에서 실행)
    * @returns 중복 시간대 여부
    */
-  async checkOverlappingTime(type: RoundType, startTime: number, tx?: DbClient): Promise<boolean> {
+  async checkOverlappingTime(
+    startTime: number,
+    endTime: number,
+    type: RoundType,
+    tx?: DbClient,
+  ): Promise<boolean> {
     const db = tx ?? getDb();
-    const duration = ROUND_DURATIONS_MS[type];
 
     const result = await db
       .select()
@@ -157,7 +165,7 @@ export class RoundRepository {
       .where(
         and(
           eq(rounds.type, type),
-          sql`${startTime} < ${rounds.endTime} AND ${startTime + duration} > ${rounds.startTime}`,
+          sql`NOT (${endTime} <= ${rounds.startTime} OR ${startTime} >= ${rounds.endTime})`,
         ),
       );
 
