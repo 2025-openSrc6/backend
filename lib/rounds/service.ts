@@ -21,7 +21,6 @@ import {
   BusinessRuleError,
   ServiceError,
 } from '@/lib/shared/errors';
-import { getDb, type DbClient } from '@/lib/db';
 import { generateUUID } from '@/lib/shared/uuid';
 import type {
   GetRoundsResult,
@@ -210,49 +209,42 @@ export class RoundService {
     const endTime = startTime + roundDurationMs;
     const lockTime = startTime + bettingDurationMs;
 
-    // 3. 트랜잭션으로 원자적 처리 (중복 체크 + roundNumber 증가 + 삽입)
-    const db = getDb();
+    // 3. 중복 체크 + roundNumber 증가 + 삽입
+    // 주의: 트랜잭션 지원 안함
 
     try {
-      return await db.transaction(async (tx: DbClient) => {
-        // 3-1. 중복 시간대 체크 (트랜잭션 내에서 실행)
-        const isOverlapping = await this.repository.checkOverlappingTime(
-          startTime,
-          endTime,
-          type,
-          tx,
+      // 3-1. 중복 시간대 체크
+      const isOverlapping = await this.repository.checkOverlappingTime(startTime, endTime, type);
+      if (isOverlapping) {
+        throw new BusinessRuleError(
+          'ROUND_TIME_OVERLAP',
+          'A round already exists for this time period',
+          {
+            type,
+            startTime,
+            endTime,
+          },
         );
-        if (isOverlapping) {
-          throw new BusinessRuleError(
-            'ROUND_TIME_OVERLAP',
-            'A round already exists for this time period',
-            {
-              type,
-              startTime,
-              endTime,
-            },
-          );
-        }
+      }
 
-        // 3-2. 마지막 roundNumber 조회 (트랜잭션 내에서 실행)
-        const lastRoundNumber = await this.repository.getLastRoundNumber(type, tx);
-        const roundNumber = lastRoundNumber + 1;
+      // 3-2. 마지막 roundNumber 조회
+      const lastRoundNumber = await this.repository.getLastRoundNumber(type);
+      const roundNumber = lastRoundNumber + 1;
 
-        // 3-3. 라운드 객체 생성
-        const roundData: RoundInsert = {
-          id: generateUUID(),
-          roundNumber,
-          type,
-          status: 'SCHEDULED',
-          startTime,
-          endTime,
-          lockTime,
-          // 나머지 필드는 기본값 (생략)
-        };
+      // 3-3. 라운드 객체 생성
+      const roundData: RoundInsert = {
+        id: generateUUID(),
+        roundNumber,
+        type,
+        status: 'SCHEDULED',
+        startTime,
+        endTime,
+        lockTime,
+        // 나머지 필드는 기본값 (생략)
+      };
 
-        // 3-4. 라운드 삽입
-        return await this.repository.insert(roundData, tx);
-      });
+      // 3-4. 라운드 삽입
+      return await this.repository.insert(roundData);
     } catch (error) {
       // 비즈니스 에러는 그대로 재발생
       if (error instanceof BusinessRuleError || error instanceof ValidationError) {
