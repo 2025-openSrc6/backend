@@ -12,11 +12,12 @@
  * - 데이터 변환 (Service에서 수행) ❌
  */
 
-import { getDb } from '@/lib/db';
+import { getDb, type DbClient } from '@/lib/db';
 import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import type { Round, RoundQueryParams, RoundType } from './types';
+import type { Round, RoundInsert, RoundQueryParams, RoundType } from './types';
+import { ROUND_DURATIONS_MS } from './constants';
 
 export class RoundRepository {
   /**
@@ -114,6 +115,66 @@ export class RoundRepository {
     const db = getDb();
     const result = await db.select().from(rounds).where(eq(rounds.id, id)).limit(1);
     return result[0];
+  }
+
+  /**
+   * 특정 타입의 마지막 roundNumber 조회
+   *
+   * @param type - 라운드 타입
+   * @param tx - 트랜잭션 (옵셔널, 제공되면 트랜잭션 내에서 실행)
+   * @returns 마지막 roundNumber 또는 0 (없으면)
+   */
+  async getLastRoundNumber(type: RoundType, tx?: DbClient): Promise<number> {
+    const db = tx ?? getDb();
+    const result = await db
+      .select({ roundNumber: rounds.roundNumber })
+      .from(rounds)
+      .where(eq(rounds.type, type))
+      .orderBy(desc(rounds.roundNumber))
+      .limit(1);
+    return result[0]?.roundNumber ?? 0;
+  }
+
+  /**
+   * 특정 타입의 중복 시간대 체크
+   *
+   * 두 구간이 겹치는지 확인:
+   * - 기존 라운드: [rounds.startTime, rounds.endTime]
+   * - 새 라운드: [startTime, startTime + duration]
+   *
+   * @param type - 라운드 타입
+   * @param startTime - 라운드 시작 시간 (Unix timestamp, 밀리초)
+   * @param tx - 트랜잭션 (옵셔널, 제공되면 트랜잭션 내에서 실행)
+   * @returns 중복 시간대 여부
+   */
+  async checkOverlappingTime(type: RoundType, startTime: number, tx?: DbClient): Promise<boolean> {
+    const db = tx ?? getDb();
+    const duration = ROUND_DURATIONS_MS[type];
+
+    const result = await db
+      .select()
+      .from(rounds)
+      .where(
+        and(
+          eq(rounds.type, type),
+          sql`${startTime} < ${rounds.endTime} AND ${startTime + duration} > ${rounds.startTime}`,
+        ),
+      );
+
+    return result.length > 0;
+  }
+
+  /**
+   * 라운드 삽입
+   *
+   * @param roundData - 라운드 데이터 (roundNumber 포함)
+   * @param tx - 트랜잭션 (옵셔널, 제공되면 트랜잭션 내에서 실행)
+   * @returns 생성된 라운드
+   */
+  async insert(roundData: RoundInsert, tx?: DbClient): Promise<Round> {
+    const db = tx ?? getDb();
+    const [inserted] = await db.insert(rounds).values(roundData).returning();
+    return inserted;
   }
 
   /**

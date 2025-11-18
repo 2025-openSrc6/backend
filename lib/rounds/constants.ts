@@ -54,21 +54,21 @@ export const DEFAULT_SORT_FIELD: RoundSortField = 'start_time';
 export const DEFAULT_SORT_ORDER = 'desc' as const;
 
 /**
- * 라운드 타입별 지속 시간 (초)
+ * 라운드 타입별 지속 시간 (ms)
  */
-export const ROUND_DURATIONS: Record<RoundType, number> = {
-  '1MIN': 60, // 1분
-  '6HOUR': 6 * 60 * 60, // 6시간
-  '1DAY': 24 * 60 * 60, // 24시간
+export const ROUND_DURATIONS_MS: Record<RoundType, number> = {
+  '1MIN': 60 * 1000, // 1분
+  '6HOUR': 6 * 60 * 60 * 1000, // 6시간
+  '1DAY': 24 * 60 * 60 * 1000, // 24시간
 } as const;
 
 /**
- * 라운드 타입별 베팅 가능 시간 (초)
+ * 라운드 타입별 베팅 가능 시간 (ms)
  *
  * 라운드 시작 후 이 시간까지만 베팅 가능
  */
-export const BETTING_DURATIONS: Record<RoundType, number> = {
-  '1MIN': 10, // 10초
-  '6HOUR': 60, // 1분
-  '1DAY': 10 * 60, // 10분
+export const BETTING_DURATIONS_MS: Record<RoundType, number> = {
+  '1MIN': 10 * 1000, // 10초
+  '6HOUR': 60 * 1000, // 1분
+  '1DAY': 10 * 60 * 1000, // 10분
 } as const;
