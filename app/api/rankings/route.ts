@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDbFromContext } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { users, achievements } from "@/db/schema";
 
 import { eq } from "drizzle-orm";
@@ -16,7 +16,7 @@ export async function GET(request: Request, context: any) {
   const { searchParams } = new URL(request.url);
   const limit = Number(searchParams.get("limit") ?? "20") || 20;
 
-  const db = await getDbFromContext(context);
+  const db = await getDb();
 
   // 1) users ↔ achievements LEFT JOIN
   //    - join 결과: 한 유저 + 그 유저의 각 achievement 행
