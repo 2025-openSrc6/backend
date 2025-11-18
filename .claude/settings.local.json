@@ -8,7 +8,8 @@
       "Bash(grep:*)",
       "Bash(git check-ignore:*)",
       "Bash(npx tsc:*)",
-      "WebSearch"
+      "WebSearch",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []
