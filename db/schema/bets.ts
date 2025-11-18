@@ -52,24 +52,24 @@ export const bets = sqliteTable(
     /** 정산 트랜잭션 해시 */
     suiPayoutTxHash: text('sui_payout_tx_hash', { length: 130 }),
 
-    /** 베팅 트랜잭션 체인 타임스탬프 */
-    suiTxTimestamp: integer('sui_tx_timestamp', { mode: 'timestamp' }),
+    /** 베팅 트랜잭션 체인 타임스탬프 (Epoch milliseconds) */
+    suiTxTimestamp: integer('sui_tx_timestamp', { mode: 'number' }),
 
-    /** 정산 트랜잭션 체인 타임스탬프 */
-    suiPayoutTimestamp: integer('sui_payout_timestamp', { mode: 'timestamp' }),
+    /** 정산 트랜잭션 체인 타임스탬프 (Epoch milliseconds) */
+    suiPayoutTimestamp: integer('sui_payout_timestamp', { mode: 'number' }),
 
-    /** 클라이언트 요청 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 클라이언트 요청 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
 
-    /** 서버가 실제 처리한 시각 (분쟁 시 기준) */
-    processedAt: integer('processed_at', { mode: 'timestamp' })
+    /** 서버가 실제 처리한 시각 (Epoch milliseconds, 분쟁 시 기준) */
+    processedAt: integer('processed_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
 
-    /** 정산 완료 시각 */
-    settledAt: integer('settled_at', { mode: 'timestamp' }),
+    /** 정산 완료 시각 (Epoch milliseconds) */
+    settledAt: integer('settled_at', { mode: 'number' }),
   },
   (table) => ({
     roundIdx: index('idx_bets_round_id').on(table.roundId),

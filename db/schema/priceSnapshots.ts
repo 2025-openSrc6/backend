@@ -29,13 +29,13 @@ export const priceSnapshots = sqliteTable(
     /** 스냅샷 타입: START / END / GENERAL */
     snapshotType: text('snapshot_type', { length: 10 }).notNull(),
 
-    /** 가격 조회 시각 */
-    snapshotAt: integer('snapshot_at', { mode: 'timestamp' }).notNull(),
+    /** 가격 조회 시각 (Epoch milliseconds) */
+    snapshotAt: integer('snapshot_at', { mode: 'number' }).notNull(),
 
-    /** 레코드 생성 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 레코드 생성 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
   },
   (table) => ({
     roundIdx: index('idx_price_snapshots_round_id').on(table.roundId),

@@ -22,14 +22,14 @@ export const rounds = sqliteTable(
     /** FSM 상태: SCHEDULED / BETTING_OPEN / ... */
     status: text('status', { length: 20 }).notNull().default('SCHEDULED'),
 
-    /** 라운드 시작 시각 (UTC unix timestamp) */
-    startTime: integer('start_time', { mode: 'timestamp' }).notNull(),
+    /** 라운드 시작 시각 (Epoch milliseconds) */
+    startTime: integer('start_time', { mode: 'number' }).notNull(),
 
-    /** 라운드 종료 시각 (시작 + 6시간 등) */
-    endTime: integer('end_time', { mode: 'timestamp' }).notNull(),
+    /** 라운드 종료 시각 (Epoch milliseconds, 시작 + 6시간 등) */
+    endTime: integer('end_time', { mode: 'number' }).notNull(),
 
-    /** 베팅 마감 시각 (시작 + 1분) */
-    lockTime: integer('lock_time', { mode: 'timestamp' }).notNull(),
+    /** 베팅 마감 시각 (Epoch milliseconds, 시작 + 1분) */
+    lockTime: integer('lock_time', { mode: 'number' }).notNull(),
 
     /** 금 시작가 (문자열로 저장하여 정밀도 보존) */
     goldStartPrice: text('gold_start_price'),
@@ -65,11 +65,11 @@ export const rounds = sqliteTable(
     /** 종료가 fallback 사유 */
     endPriceFallbackReason: text('end_price_fallback_reason'),
 
-    /** 시작 시점 스냅샷 타임스탬프 */
-    priceSnapshotStartAt: integer('price_snapshot_start_at', { mode: 'timestamp' }),
+    /** 시작 시점 스냅샷 타임스탬프 (Epoch milliseconds) */
+    priceSnapshotStartAt: integer('price_snapshot_start_at', { mode: 'number' }),
 
-    /** 종료 시점 스냅샷 타임스탬프 */
-    priceSnapshotEndAt: integer('price_snapshot_end_at', { mode: 'timestamp' }),
+    /** 종료 시점 스냅샷 타임스탬프 (Epoch milliseconds) */
+    priceSnapshotEndAt: integer('price_snapshot_end_at', { mode: 'number' }),
 
     /** 금 변동률 (예: "0.015") */
     goldChangePercent: text('gold_change_percent'),
@@ -106,27 +106,27 @@ export const rounds = sqliteTable(
     /** Sui Settlement Object ID */
     suiSettlementObjectId: text('sui_settlement_object_id', { length: 100 }),
 
-    /** BETTING_OPEN 전환 시각 */
-    bettingOpenedAt: integer('betting_opened_at', { mode: 'timestamp' }),
+    /** BETTING_OPEN 전환 시각 (Epoch milliseconds) */
+    bettingOpenedAt: integer('betting_opened_at', { mode: 'number' }),
 
-    /** BETTING_LOCKED 전환 시각 */
-    bettingLockedAt: integer('betting_locked_at', { mode: 'timestamp' }),
+    /** BETTING_LOCKED 전환 시각 (Epoch milliseconds) */
+    bettingLockedAt: integer('betting_locked_at', { mode: 'number' }),
 
-    /** PRICE_PENDING 진입 시각 */
-    roundEndedAt: integer('round_ended_at', { mode: 'timestamp' }),
+    /** PRICE_PENDING 진입 시각 (Epoch milliseconds) */
+    roundEndedAt: integer('round_ended_at', { mode: 'number' }),
 
-    /** 정산 완료 시각 */
-    settlementCompletedAt: integer('settlement_completed_at', { mode: 'timestamp' }),
+    /** 정산 완료 시각 (Epoch milliseconds) */
+    settlementCompletedAt: integer('settlement_completed_at', { mode: 'number' }),
 
-    /** 생성 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 생성 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
 
-    /** 업데이트 시각 */
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    /** 업데이트 시각 (Epoch milliseconds) */
+    updatedAt: integer('updated_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
   },
   (table) => ({
     typeStatusIdx: index('idx_rounds_type_status').on(table.type, table.status),

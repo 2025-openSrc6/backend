@@ -33,8 +33,11 @@ deltaX 베팅 시스템의 REST API 엔드포인트 명세
 Content-Type: application/json
 ```
 
-**타임존**
-- 모든 timestamp는 **Unix timestamp** (초 단위)
+**Timestamp 형식**
+- 모든 timestamp는 **Epoch milliseconds** (밀리초 단위)
+- 1970-01-01 00:00:00 UTC 이후 경과한 밀리초
+- JavaScript Date와 직접 호환: `new Date(timestamp)`
+- 예시: `1700000000000` (2023년 11월 15일)
 - 클라이언트에서 로컬 타임존 변환
 
 ### API 카테고리
@@ -71,7 +74,7 @@ Response:
 {
   "success": true,
   "sessionId": "session_uuid",
-  "expiresAt": 1700000000
+  "expiresAt": 1700000000000
 }
 ```
 
@@ -158,9 +161,9 @@ Authorization: Bearer session_uuid
         "roundNumber": 42,
         "type": "6HOUR",
         "status": "BETTING_OPEN",
-        "startTime": 1700000000,
-        "endTime": 1700021600,
-        "lockTime": 1700000060,
+        "startTime": 1700000000000,
+        "endTime": 1700021600000,
+        "lockTime": 1700000060000,
         
         // 가격 정보 (있는 경우)
         "goldStartPrice": "2650.50",
@@ -178,8 +181,8 @@ Authorization: Bearer session_uuid
         "winner": null,
         
         // 타임스탬프
-        "createdAt": 1699999400,
-        "updatedAt": 1700000001
+        "createdAt": 1699999400000,
+        "updatedAt": 1700000001000
       }
       // ... more rounds
     ]
@@ -227,9 +230,9 @@ GET /api/rounds?status=SETTLED&sort=start_time&order=desc&pageSize=20
       "status": "BETTING_OPEN",
       
       // 시간 정보
-      "startTime": 1700000000,
-      "endTime": 1700021600,
-      "lockTime": 1700000060,
+      "startTime": 1700000000000,
+      "endTime": 1700021600000,
+      "lockTime": 1700000060000,
       "timeRemaining": 21540,        // 종료까지 남은 초 (초 단위)
       "bettingTimeRemaining": 45,    // 베팅 마감까지 남은 초
       
@@ -253,8 +256,8 @@ GET /api/rounds?status=SETTLED&sort=start_time&order=desc&pageSize=20
       "canBet": true,                 // 베팅 가능 여부
       "bettingClosesIn": "00:00:45",  // "MM:SS" 형식
       
-      "createdAt": 1699999400,
-      "updatedAt": 1700000001
+      "createdAt": 1699999400000,
+      "updatedAt": 1700000001000
     }
   }
 }
@@ -322,9 +325,9 @@ GET /api/rounds?status=SETTLED&sort=start_time&order=desc&pageSize=20
 ```typescript
 {
   "type": "6HOUR",
-  "startTime": 1700000000,    // Unix timestamp
-  "endTime": 1700021600,
-  "lockTime": 1700000060
+  "startTime": 1700000000000,    // Epoch milliseconds
+  "endTime": 1700021600000,
+  "lockTime": 1700000060000
 }
 ```
 
@@ -383,8 +386,8 @@ GET /api/rounds?status=SETTLED&sort=start_time&order=desc&pageSize=20
       "suiBetObjectId": "0x...",
       "suiTxHash": "0x...",
       
-      "createdAt": 1700000030,
-      "processedAt": 1700000031
+      "createdAt": 1700000030000,
+      "processedAt": 1700000031000
     },
     
     // 업데이트된 라운드 정보
@@ -421,7 +424,7 @@ GET /api/rounds?status=SETTLED&sort=start_time&order=desc&pageSize=20
     "message": "베팅이 마감되었습니다",
     "details": {
       "roundStatus": "BETTING_LOCKED",
-      "lockedAt": 1700000060
+      "lockedAt": 1700000060000
     }
   }
 }
@@ -491,8 +494,8 @@ GET /api/rounds?status=SETTLED&sort=start_time&order=desc&pageSize=20
         "settlementStatus": "WON",
         "payoutAmount": 1780,          // 배당금
         
-        "createdAt": 1700000030,
-        "settledAt": 1700021631
+        "createdAt": 1700000030000,
+        "settledAt": 1700021631000
       }
       // ...
     ]
@@ -581,8 +584,8 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
       "canAttendToday": false,    // 오늘 출석 가능 여부
       
       // 타임스탬프
-      "createdAt": 1699000000,
-      "updatedAt": 1700000001
+      "createdAt": 1699000000000,
+      "updatedAt": 1700000001000
     }
   }
 }
@@ -726,9 +729,9 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
       "suiSettlementObjectId": "0x...",
       
       // 타임스탬프
-      "calculatedAt": 1700021620,
-      "completedAt": 1700021630,
-      "createdAt": 1700021620
+      "calculatedAt": 1700021620000,
+      "completedAt": 1700021630000,
+      "createdAt": 1700021620000
     },
     
     // 추가: 라운드 정보
@@ -762,7 +765,7 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
   "data": {
     "reward": 5000,               // 지급된 del
     "attendanceStreak": 8,        // 연속 출석일
-    "nextAttendanceAt": 1700086400,  // 다음 출석 가능 시각
+    "nextAttendanceAt": 1700086400000,  // 다음 출석 가능 시각
     
     "transaction": {
       "id": "uuid",
@@ -770,7 +773,7 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
       "amount": 5000,
       "balanceBefore": 10000,
       "balanceAfter": 15000,
-      "createdAt": 1700000000
+      "createdAt": 1700000000000
     }
   }
 }
@@ -785,8 +788,8 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
     "code": "ALREADY_ATTENDED",
     "message": "오늘 이미 출석했습니다",
     "details": {
-      "lastAttendanceAt": 1700000000,
-      "nextAttendanceAt": 1700086400
+      "lastAttendanceAt": 1700000000000,
+      "nextAttendanceAt": 1700086400000
     }
   }
 }
@@ -826,7 +829,7 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
         "referenceId": "bet_uuid",
         "referenceType": "BET",
         "description": "라운드 #42 승리",
-        "createdAt": 1700021631
+        "createdAt": 1700021631000
       },
       {
         "id": "uuid",
@@ -839,7 +842,7 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
         "referenceId": "bet_uuid2",
         "referenceType": "BET",
         "description": "라운드 #43 베팅",
-        "createdAt": 1700025000
+        "createdAt": 1700025000000
       }
       // ...
     ]
@@ -893,7 +896,7 @@ GET /api/bets?roundId=uuid&settlementStatus=WON
     "round": {
       "id": "uuid",
       "status": "CANCELLED",
-      "updatedAt": 1700000000
+      "updatedAt": 1700000000000
     },
     "refundedBets": 150,          // 환불된 베팅 수
     "refundedAmount": 1500000     // 환불된 총 금액
@@ -930,7 +933,7 @@ socket.on('round:update', (data) => {
   //   totalGoldBets: 801000,
   //   totalBtcBets: 700000,
   //   totalBetsCount: 151,
-  //   updatedAt: 1700000031
+  //   updatedAt: 1700000031000
   // }
 });
 ```
@@ -942,7 +945,7 @@ socket.on('round:status_changed', (data) => {
   //   roundId: 'uuid',
   //   fromStatus: 'BETTING_OPEN',
   //   toStatus: 'BETTING_LOCKED',
-  //   timestamp: 1700000060
+  //   timestamp: 1700000060000
   // }
 });
 ```
@@ -965,7 +968,7 @@ socket.on('price:update', (data) => {
   // {
   //   gold: "2655.30",
   //   btc: "98450.00",
-  //   timestamp: 1700000035,
+  //   timestamp: 1700000035000,
   //   source: 'kitco'
   // }
 });
@@ -979,7 +982,7 @@ socket.on('settlement:completed', (data) => {
   //   winner: 'GOLD',
   //   payoutRatio: '1.78',
   //   totalWinners: 85,
-  //   settledAt: 1700021630
+  //   settledAt: 1700021630000
   // }
 });
 ```

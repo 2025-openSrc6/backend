@@ -46,10 +46,10 @@ export const pointTransactions = sqliteTable(
     /** 관련 Sui 트랜잭션 해시 (있을 경우) */
     suiTxHash: text('sui_tx_hash', { length: 130 }),
 
-    /** 생성 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 생성 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
   },
   (table) => ({
     userIdx: index('idx_point_tx_user_id').on(table.userId),

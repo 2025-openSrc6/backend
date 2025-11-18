@@ -37,21 +37,21 @@ export const users = sqliteTable(
     /** 누적 베팅 금액 (DEL 단위) */
     totalVolume: integer('total_volume', { mode: 'number' }).notNull().default(0),
 
-    /** 마지막 출석 체크 시각 (UTC unix timestamp) */
-    lastAttendanceAt: integer('last_attendance_at', { mode: 'timestamp' }),
+    /** 마지막 출석 체크 시각 (Epoch milliseconds) */
+    lastAttendanceAt: integer('last_attendance_at', { mode: 'number' }),
 
     /** 연속 출석 일수 */
     attendanceStreak: integer('attendance_streak', { mode: 'number' }).notNull().default(0),
 
-    /** 생성 시각 */
-    createdAt: integer('created_at', { mode: 'timestamp' })
+    /** 생성 시각 (Epoch milliseconds) */
+    createdAt: integer('created_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
 
-    /** 마지막 업데이트 시각 */
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    /** 마지막 업데이트 시각 (Epoch milliseconds) */
+    updatedAt: integer('updated_at', { mode: 'number' })
       .notNull()
-      .$defaultFn(() => new Date()),
+      .$defaultFn(() => Date.now()),
   },
   (table) => ({
     suiAddressIdx: uniqueIndex('idx_users_sui_address').on(table.suiAddress),
