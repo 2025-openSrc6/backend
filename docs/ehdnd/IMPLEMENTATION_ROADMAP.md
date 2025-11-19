@@ -70,20 +70,20 @@ Week 4: 12/06 ~ 12/12 (7일)
 - [x] 로컬 DB 폴백 로직 (better-sqlite3)
 
 🎯 추가 작업
-- [ ] 환경 변수 정리 (.env.example)
-- [ ] 마이그레이션 스크립트 검증
+- [x] 환경 변수 정리 (.env.example)
+- [x] 마이그레이션 스크립트 검증
   - npm run db:generate
   - npm run db:migrate:local
-- [ ] Git 브랜치 전략 확정
+- [x] Git 브랜치 전략 확정
   - dev (개발), main (프로덕션)
 ```
 
 **전체 팀**
 
 ```
-- [ ] 의존성 설치 및 개발 환경 설정
-- [ ] 프로젝트 문서 공유 (Notion/Slack)
-- [ ] API 명세 리뷰 (API_SPECIFICATION.md)
+- [x] 의존성 설치 및 개발 환경 설정
+- [x] 프로젝트 문서 공유 (Notion/Slack)
+- [x] API 명세 리뷰 (API_SPECIFICATION.md)
 ```
 
 ---
@@ -94,13 +94,13 @@ Week 4: 12/06 ~ 12/12 (7일)
 
 ```
 Priority 1: Rounds API
-- [ ] GET /api/rounds
+- [x] GET /api/rounds
   - 쿼리 파라미터: type, status, page, pageSize
   - 페이지네이션 구현
-- [ ] GET /api/rounds/current
+- [x] GET /api/rounds/current
   - 활성 라운드 조회 (가장 중요!)
   - canBet 플래그 계산
-- [ ] GET /api/rounds/:id
+- [x] GET /api/rounds/:id
   - 라운드 상세 정보
   - settlement 정보 포함 (settled 시)
 
