@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 const BINANCE_BASE_URL = 'https://api.binance.com/api/v3';
 
 const SYMBOL_MAP = {
@@ -8,6 +10,31 @@ const SYMBOL_MAP = {
 } as const;
 
 type SupportedAsset = keyof typeof SYMBOL_MAP;
+
+// Zod schemas for runtime validation
+const BinanceKlineRawSchema = z.tuple([
+  z.number(), // openTime
+  z.string(), // open
+  z.string(), // high
+  z.string(), // low
+  z.string(), // close
+  z.string(), // volume
+  z.number(), // closeTime
+  z.string(), // quote asset volume
+  z.number(), // number of trades
+  z.string(), // taker buy base asset volume
+  z.string(), // taker buy quote asset volume
+  z.string(), // ignore
+]);
+
+const BinanceKlineArraySchema = z.array(BinanceKlineRawSchema);
+
+const BinanceTickerSchema = z.object({
+  symbol: z.string(),
+  lastPrice: z.string(),
+  priceChangePercent: z.string(),
+  volume: z.string(),
+});
 
 interface BinanceKline {
   openTime: number;
@@ -41,14 +68,17 @@ export async function fetchKlines(
 
   const data = await response.json();
 
-  return data.map((kline: (string | number)[]) => ({
-    openTime: kline[0] as number,
-    open: parseFloat(kline[1] as string),
-    high: parseFloat(kline[2] as string),
-    low: parseFloat(kline[3] as string),
-    close: parseFloat(kline[4] as string),
-    volume: parseFloat(kline[5] as string),
-    closeTime: kline[6] as number,
+  // Validate response data with Zod
+  const validatedData = BinanceKlineArraySchema.parse(data);
+
+  return validatedData.map((kline) => ({
+    openTime: kline[0],
+    open: parseFloat(kline[1]),
+    high: parseFloat(kline[2]),
+    low: parseFloat(kline[3]),
+    close: parseFloat(kline[4]),
+    volume: parseFloat(kline[5]),
+    closeTime: kline[6],
   }));
 }
 
@@ -63,11 +93,14 @@ export async function fetchCurrentPrice(asset: SupportedAsset): Promise<BinanceT
 
   const data = await response.json();
 
+  // Validate response data with Zod
+  const validatedData = BinanceTickerSchema.parse(data);
+
   return {
-    symbol: data.symbol,
-    price: data.lastPrice,
-    priceChangePercent: data.priceChangePercent,
-    volume: data.volume,
+    symbol: validatedData.symbol,
+    price: validatedData.lastPrice,
+    priceChangePercent: validatedData.priceChangePercent,
+    volume: validatedData.volume,
   };
 }
 
