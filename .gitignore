@@ -58,3 +58,6 @@ delta.db
 *.sqlite3
 *.db-journal
 *.sqlite-journal
+
+# claude local settings
+.claude/settings.local.json
