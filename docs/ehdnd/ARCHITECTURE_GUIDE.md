@@ -62,23 +62,25 @@ deltaX 프로젝트의 API 아키텍처 베스트 프랙티스
 ### 문제: 의존성을 어디서 조립할 것인가?
 
 **이전 접근 방식의 문제점**:
+
 ```typescript
 // ❌ 문제: Controller에서 직접 조립
 export async function GET(request: NextRequest) {
   const repo = new RoundRepository();
-  const service = new RoundService(repo);  // 매번 생성
+  const service = new RoundService(repo); // 매번 생성
   return await service.getRounds(params);
 }
 
 // ❌ 문제: Service에서 자체 조립
 class RoundService {
   constructor(repository?: RoundRepository) {
-    this.repository = repository ?? new RoundRepository();  // DI 원칙 위반
+    this.repository = repository ?? new RoundRepository(); // DI 원칙 위반
   }
 }
 ```
 
 **문제점**:
+
 1. Controller가 의존성 조립까지 책임짐 (역할 과다)
 2. 매 요청마다 인스턴스 재생성 (성능 낭비)
 3. Service가 자체적으로 의존성 생성 (테스트 어려움)
@@ -156,6 +158,7 @@ export async function GET(request: NextRequest) {
 ```
 
 **장점**:
+
 - ✅ Controller는 의존성 조립을 신경 쓰지 않음
 - ✅ 인스턴스 재사용으로 성능 향상
 - ✅ 의존성 변경 시 registry.ts만 수정
@@ -175,6 +178,7 @@ export async function getRoundsAction(params: unknown) {
 ```
 
 **장점**:
+
 - ✅ 동일한 조립 파일 사용
 - ✅ 중복 없음
 
@@ -217,6 +221,7 @@ describe('RoundService', () => {
 #### 1. 의존성 조립을 한 곳에서
 
 **Before (조립 로직이 분산)**:
+
 ```typescript
 // Controller A
 const service = new RoundService(new RoundRepository());
@@ -228,6 +233,7 @@ const service = new RoundService(new RoundRepository());
 ```
 
 **After (조립 파일에서 일괄 관리)**:
+
 ```typescript
 // lib/registry.ts (한 곳에서만 정의)
 get roundService(): RoundService {
@@ -239,6 +245,7 @@ const result = await registry.roundService.getRounds(params);
 ```
 
 **이점**:
+
 - 의존성 변경 시 registry.ts만 수정
 - 조립 로직 중복 제거
 
@@ -246,10 +253,10 @@ const result = await registry.roundService.getRounds(params);
 
 ```typescript
 // 첫 호출: 생성
-const service1 = registry.roundService;  // new RoundService(...)
+const service1 = registry.roundService; // new RoundService(...)
 
 // 이후 호출: 재사용
-const service2 = registry.roundService;  // 같은 인스턴스
+const service2 = registry.roundService; // 같은 인스턴스
 ```
 
 #### 3. 확장 용이
@@ -278,17 +285,17 @@ class ServiceRegistry {
 ```typescript
 // ❌ 나쁜 예
 class RoundService {
-  private currentUser?: User;  // ❌ 모든 요청이 공유
+  private currentUser?: User; // ❌ 모든 요청이 공유
 
   async getRounds(params: unknown) {
-    this.currentUser = getCurrentUser();  // ❌ 요청 A가 요청 B에 영향
+    this.currentUser = getCurrentUser(); // ❌ 요청 A가 요청 B에 영향
   }
 }
 
 // ✅ 좋은 예
 class RoundService {
   async getRounds(params: unknown, userId?: string) {
-    const user = userId ? await getUserById(userId) : null;  // 파라미터로 전달
+    const user = userId ? await getUserById(userId) : null; // 파라미터로 전달
   }
 }
 ```
@@ -315,17 +322,20 @@ get roundService(): RoundService {
 **위치**: `app/api/*/route.ts`
 
 **책임**:
+
 - ✅ HTTP 요청 파싱 (query params, body, headers)
 - ✅ Service Layer 호출
 - ✅ HTTP 응답 생성 (status code, headers, body)
 - ✅ HTTP 에러 변환 (ServiceError → HTTP Response)
 
 **금지 사항**:
+
 - ❌ 비즈니스 로직 포함
 - ❌ 직접 DB 접근
 - ❌ 복잡한 데이터 변환
 
 **예시**:
+
 ```typescript
 export async function GET(request: NextRequest) {
   try {
@@ -351,6 +361,7 @@ export async function GET(request: NextRequest) {
 **위치**: `lib/*/service.ts`
 
 **책임**:
+
 - ✅ 입력 검증 (Zod schema)
 - ✅ 비즈니스 로직 (계산, 판단, 변환)
 - ✅ Repository 조합 (여러 Repository 호출)
@@ -358,11 +369,13 @@ export async function GET(request: NextRequest) {
 - ✅ 비즈니스 에러 발생
 
 **금지 사항**:
+
 - ❌ HTTP 의존성 (NextRequest, NextResponse)
 - ❌ 직접 SQL 작성
 - ❌ 프레임워크 종속적인 코드
 
 **예시**:
+
 ```typescript
 export class RoundService {
   constructor(
@@ -379,7 +392,7 @@ export class RoundService {
     const total = await this.roundRepo.count(validated);
 
     // 3. 비즈니스 로직 (필요시)
-    const enrichedRounds = rounds.map(round => ({
+    const enrichedRounds = rounds.map((round) => ({
       ...round,
       canBet: this.canBetOnRound(round),
     }));
@@ -397,8 +410,7 @@ export class RoundService {
   }
 
   private canBetOnRound(round: Round): boolean {
-    return round.status === 'BETTING_OPEN' &&
-           Date.now() < round.lockTime * 1000;
+    return round.status === 'BETTING_OPEN' && Date.now() < round.lockTime * 1000;
   }
 }
 ```
@@ -410,17 +422,20 @@ export class RoundService {
 **위치**: `lib/*/repository.ts`
 
 **책임**:
+
 - ✅ DB 쿼리 생성 (Drizzle ORM)
 - ✅ 필터/정렬/페이지네이션 로직
 - ✅ Raw 데이터 반환
 - ✅ DB 에러 처리
 
 **금지 사항**:
+
 - ❌ 비즈니스 로직
 - ❌ 입력 검증 (Service에서 수행)
 - ❌ 데이터 변환 (Service에서 수행)
 
 **예시**:
+
 ```typescript
 export class RoundRepository {
   constructor(private db: DrizzleDB) {}
@@ -519,17 +534,20 @@ deltax/
 ### 2. 함수 네이밍
 
 **Service Layer**:
+
 - `getRounds()`, `getRoundById()`, `createRound()`
 - `updateRound()`, `deleteRound()`
 - Prefix: get, create, update, delete, calculate, validate
 
 **Repository Layer**:
+
 - `findMany()`, `findById()`, `findOne()`
 - `insert()`, `update()`, `delete()`
 - `count()`, `exists()`
 - Prefix: find, insert, update, delete, count, exists
 
 **Controller Layer**:
+
 - HTTP method 함수: `GET()`, `POST()`, `PATCH()`, `DELETE()`
 - Helper: `parseQueryParams()`, `createSuccessResponse()`
 
@@ -677,7 +695,9 @@ describe('RoundService', () => {
   });
 
   it('should return rounds with pagination', async () => {
-    mockRepo.findMany.mockResolvedValue([/* mock data */]);
+    mockRepo.findMany.mockResolvedValue([
+      /* mock data */
+    ]);
     mockRepo.count.mockResolvedValue(100);
 
     const result = await service.getRounds({
@@ -690,9 +710,7 @@ describe('RoundService', () => {
   });
 
   it('should throw ValidationError for invalid page', async () => {
-    await expect(
-      service.getRounds({ page: 0, pageSize: 20 })
-    ).rejects.toThrow(ValidationError);
+    await expect(service.getRounds({ page: 0, pageSize: 20 })).rejects.toThrow(ValidationError);
   });
 });
 ```
@@ -728,21 +746,25 @@ describe('GET /api/rounds', () => {
 ## 확장 계획
 
 ### Phase 1: 현재 (Week 1)
+
 - ✅ Rounds API (GET /api/rounds)
 - 🔜 Rounds API (GET /api/rounds/current)
 - 🔜 Rounds API (GET /api/rounds/:id)
 
 ### Phase 2: Week 2-3
+
 - Bets API (동일한 패턴 적용)
 - Users API (도영)
 - Points API (도영)
 
 ### Phase 3: Week 4
+
 - Settlement logic
 - Cron jobs
 - WebSocket events
 
 ### 재사용 가능한 패턴
+
 1. **Pagination**: `lib/shared/pagination.ts`
 2. **Filtering**: `lib/shared/filtering.ts`
 3. **Sorting**: `lib/shared/sorting.ts`
@@ -754,6 +776,7 @@ describe('GET /api/rounds', () => {
 ## 요약
 
 ### ✅ DO
+
 - Controller는 HTTP만, Service는 비즈니스만, Repository는 DB만
 - Zod로 입력 검증
 - Custom Error class 사용
@@ -761,6 +784,7 @@ describe('GET /api/rounds', () => {
 - 공통 유틸리티 재사용
 
 ### ❌ DON'T
+
 - Controller에 비즈니스 로직 작성
 - Service에서 직접 SQL 작성
 - Repository에 검증 로직 포함

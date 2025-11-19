@@ -109,16 +109,12 @@
       "indexes": {
         "idx_users_sui_address": {
           "name": "idx_users_sui_address",
-          "columns": [
-            "sui_address"
-          ],
+          "columns": ["sui_address"],
           "isUnique": true
         },
         "idx_users_created_at": {
           "name": "idx_users_created_at",
-          "columns": [
-            "created_at"
-          ],
+          "columns": ["created_at"],
           "isUnique": false
         }
       },
@@ -395,32 +391,22 @@
       "indexes": {
         "idx_rounds_type_status": {
           "name": "idx_rounds_type_status",
-          "columns": [
-            "type",
-            "status"
-          ],
+          "columns": ["type", "status"],
           "isUnique": false
         },
         "idx_rounds_start_time": {
           "name": "idx_rounds_start_time",
-          "columns": [
-            "start_time"
-          ],
+          "columns": ["start_time"],
           "isUnique": false
         },
         "idx_rounds_round_number": {
           "name": "idx_rounds_round_number",
-          "columns": [
-            "round_number"
-          ],
+          "columns": ["round_number"],
           "isUnique": false
         },
         "idx_rounds_type_round_number": {
           "name": "idx_rounds_type_round_number",
-          "columns": [
-            "type",
-            "round_number"
-          ],
+          "columns": ["type", "round_number"],
           "isUnique": true
         }
       },
@@ -559,45 +545,32 @@
       "indexes": {
         "idx_bets_round_id": {
           "name": "idx_bets_round_id",
-          "columns": [
-            "round_id"
-          ],
+          "columns": ["round_id"],
           "isUnique": false
         },
         "idx_bets_user_id": {
           "name": "idx_bets_user_id",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "idx_bets_settlement_status": {
           "name": "idx_bets_settlement_status",
-          "columns": [
-            "settlement_status"
-          ],
+          "columns": ["settlement_status"],
           "isUnique": false
         },
         "idx_bets_result_status": {
           "name": "idx_bets_result_status",
-          "columns": [
-            "result_status"
-          ],
+          "columns": ["result_status"],
           "isUnique": false
         },
         "idx_bets_created_at": {
           "name": "idx_bets_created_at",
-          "columns": [
-            "created_at"
-          ],
+          "columns": ["created_at"],
           "isUnique": false
         },
         "idx_bets_user_round": {
           "name": "idx_bets_user_round",
-          "columns": [
-            "user_id",
-            "round_id"
-          ],
+          "columns": ["user_id", "round_id"],
           "isUnique": true
         }
       },
@@ -606,12 +579,8 @@
           "name": "bets_round_id_rounds_id_fk",
           "tableFrom": "bets",
           "tableTo": "rounds",
-          "columnsFrom": [
-            "round_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["round_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -619,12 +588,8 @@
           "name": "bets_user_id_users_id_fk",
           "tableFrom": "bets",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -696,23 +661,17 @@
       "indexes": {
         "idx_price_snapshots_round_id": {
           "name": "idx_price_snapshots_round_id",
-          "columns": [
-            "round_id"
-          ],
+          "columns": ["round_id"],
           "isUnique": false
         },
         "idx_price_snapshots_snapshot_at": {
           "name": "idx_price_snapshots_snapshot_at",
-          "columns": [
-            "snapshot_at"
-          ],
+          "columns": ["snapshot_at"],
           "isUnique": false
         },
         "idx_price_snapshots_type": {
           "name": "idx_price_snapshots_type",
-          "columns": [
-            "snapshot_type"
-          ],
+          "columns": ["snapshot_type"],
           "isUnique": false
         }
       },
@@ -721,12 +680,8 @@
           "name": "price_snapshots_round_id_rounds_id_fk",
           "tableFrom": "price_snapshots",
           "tableTo": "rounds",
-          "columnsFrom": [
-            "round_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["round_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -847,16 +802,12 @@
       "indexes": {
         "idx_settlements_round_id": {
           "name": "idx_settlements_round_id",
-          "columns": [
-            "round_id"
-          ],
+          "columns": ["round_id"],
           "isUnique": true
         },
         "idx_settlements_completed_at": {
           "name": "idx_settlements_completed_at",
-          "columns": [
-            "completed_at"
-          ],
+          "columns": ["completed_at"],
           "isUnique": false
         }
       },
@@ -865,12 +816,8 @@
           "name": "settlements_round_id_rounds_id_fk",
           "tableFrom": "settlements",
           "tableTo": "rounds",
-          "columnsFrom": [
-            "round_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["round_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -970,31 +917,22 @@
       "indexes": {
         "idx_point_tx_user_id": {
           "name": "idx_point_tx_user_id",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "idx_point_tx_type": {
           "name": "idx_point_tx_type",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "idx_point_tx_created_at": {
           "name": "idx_point_tx_created_at",
-          "columns": [
-            "created_at"
-          ],
+          "columns": ["created_at"],
           "isUnique": false
         },
         "idx_point_tx_reference": {
           "name": "idx_point_tx_reference",
-          "columns": [
-            "reference_type",
-            "reference_id"
-          ],
+          "columns": ["reference_type", "reference_id"],
           "isUnique": false
         }
       },
@@ -1003,12 +941,8 @@
           "name": "point_transactions_user_id_users_id_fk",
           "tableFrom": "point_transactions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1122,23 +1056,17 @@
       "indexes": {
         "idx_achievements_user_id": {
           "name": "idx_achievements_user_id",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "idx_achievements_type": {
           "name": "idx_achievements_type",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "idx_achievements_tier": {
           "name": "idx_achievements_tier",
-          "columns": [
-            "tier"
-          ],
+          "columns": ["tier"],
           "isUnique": false
         }
       },
@@ -1147,12 +1075,8 @@
           "name": "achievements_user_id_users_id_fk",
           "tableFrom": "achievements",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1217,16 +1141,12 @@
       "indexes": {
         "idx_round_transitions_round_id": {
           "name": "idx_round_transitions_round_id",
-          "columns": [
-            "round_id"
-          ],
+          "columns": ["round_id"],
           "isUnique": false
         },
         "idx_round_transitions_created_at": {
           "name": "idx_round_transitions_created_at",
-          "columns": [
-            "created_at"
-          ],
+          "columns": ["created_at"],
           "isUnique": false
         }
       },
@@ -1235,12 +1155,8 @@
           "name": "round_transitions_round_id_rounds_id_fk",
           "tableFrom": "round_transitions",
           "tableTo": "rounds",
-          "columnsFrom": [
-            "round_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["round_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
