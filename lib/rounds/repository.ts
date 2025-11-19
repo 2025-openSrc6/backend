@@ -12,7 +12,7 @@
  * - 데이터 변환 (Service에서 수행) ❌
  */
 
-import { getDb, type DbClient } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
@@ -46,11 +46,8 @@ export class RoundRepository {
     const orderByExpression = order === 'asc' ? asc(orderColumn) : desc(orderColumn);
 
     // 3. 쿼리 실행
-    let query = db.select().from(rounds);
-
-    if (whereConditions) {
-      query = query.where(whereConditions);
-    }
+    const baseQuery = db.select().from(rounds);
+    const query = whereConditions ? baseQuery.where(whereConditions) : baseQuery;
 
     return query.orderBy(orderByExpression).limit(limit).offset(offset);
   }
@@ -94,11 +91,8 @@ export class RoundRepository {
 
     const whereConditions = this.buildFilters(filters);
 
-    let query = db.select({ value: sql<number>`count(*)` }).from(rounds);
-
-    if (whereConditions) {
-      query = query.where(whereConditions);
-    }
+    const baseQuery = db.select({ value: sql<number>`count(*)` }).from(rounds);
+    const query = whereConditions ? baseQuery.where(whereConditions) : baseQuery;
 
     const result = await query;
     return result[0]?.value ?? 0;
@@ -120,11 +114,10 @@ export class RoundRepository {
    * 특정 타입의 마지막 roundNumber 조회
    *
    * @param type - 라운드 타입
-   * @param tx - 트랜잭션 (옵셔널, 제공되면 트랜잭션 내에서 실행)
    * @returns 마지막 roundNumber 또는 0 (없으면)
    */
-  async getLastRoundNumber(type: RoundType, tx?: DbClient): Promise<number> {
-    const db = tx ?? getDb();
+  async getLastRoundNumber(type: RoundType): Promise<number> {
+    const db = getDb();
     const result = await db
       .select({ roundNumber: rounds.roundNumber })
       .from(rounds)
@@ -148,16 +141,14 @@ export class RoundRepository {
    * @param startTime - 새 라운드 시작 시간 (Epoch milliseconds)
    * @param endTime - 새 라운드 종료 시간 (Epoch milliseconds)
    * @param type - 라운드 타입
-   * @param tx - 트랜잭션 (옵셔널, 제공되면 트랜잭션 내에서 실행)
    * @returns 중복 시간대 여부
    */
   async checkOverlappingTime(
     startTime: number,
     endTime: number,
     type: RoundType,
-    tx?: DbClient,
   ): Promise<boolean> {
-    const db = tx ?? getDb();
+    const db = getDb();
 
     const result = await db
       .select()
@@ -176,11 +167,10 @@ export class RoundRepository {
    * 라운드 삽입
    *
    * @param roundData - 라운드 데이터 (roundNumber 포함)
-   * @param tx - 트랜잭션 (옵셔널, 제공되면 트랜잭션 내에서 실행)
    * @returns 생성된 라운드
    */
-  async insert(roundData: RoundInsert, tx?: DbClient): Promise<Round> {
-    const db = tx ?? getDb();
+  async insert(roundData: RoundInsert): Promise<Round> {
+    const db = getDb();
     const [inserted] = await db.insert(rounds).values(roundData).returning();
     return inserted;
   }

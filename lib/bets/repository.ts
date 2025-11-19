@@ -6,9 +6,13 @@
  * - 트랜잭션 처리 (D1 Batch 사용)
  * - Atomic 업데이트
  * - 실패 시 보상 트랜잭션 (Compensation) 처리
+ *
+ * D1 Batch 전략:
+ * - Interactive Transaction 미지원으로 인해 batch API 사용
+ * - 조건 불만족 시 보상 트랜잭션으로 데이터 정합성 보장
  */
 
-import { getDb, type DbClient, type RemoteDrizzleClient, type LocalDrizzleClient } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { bets, rounds, users } from '@/db/schema';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
@@ -17,14 +21,6 @@ import type { Round } from '@/db/schema/rounds';
 import type { BetQueryParams, CreateBetInput } from './types';
 
 export class BetRepository {
-  /**
-   * 환경 감지 헬퍼
-   * db 객체가 batch 메서드를 지원하는지 확인합니다 (D1 vs Local).
-   */
-  private isD1(db: DbClient): db is RemoteDrizzleClient {
-    return 'batch' in db && typeof (db as RemoteDrizzleClient).batch === 'function';
-  }
-
   /**
    * 베팅 목록 조회 (필터/정렬/페이지네이션)
    */
@@ -36,13 +32,10 @@ export class BetRepository {
     const orderColumn = sort === 'amount' ? bets.amount : bets.createdAt;
     const orderByExpression = order === 'asc' ? asc(orderColumn) : desc(orderColumn);
 
-    let query = db.select().from(bets);
+    const baseQuery = db.select().from(bets);
+    const queryWithConditions = whereConditions ? baseQuery.where(whereConditions) : baseQuery;
 
-    if (whereConditions) {
-      query = query.where(whereConditions);
-    }
-
-    return query.orderBy(orderByExpression).limit(limit).offset(offset);
+    return queryWithConditions.orderBy(orderByExpression).limit(limit).offset(offset);
   }
 
   /**
@@ -52,13 +45,10 @@ export class BetRepository {
     const db = getDb();
     const whereConditions = this.buildFilters(params.filters);
 
-    let query = db.select({ count: sql<number>`count(*)` }).from(bets);
+    const baseQuery = db.select({ count: sql<number>`count(*)` }).from(bets);
+    const queryWithConditions = whereConditions ? baseQuery.where(whereConditions) : baseQuery;
 
-    if (whereConditions) {
-      query = query.where(whereConditions);
-    }
-
-    const result = await query;
+    const result = await queryWithConditions;
     return result[0]?.count ?? 0;
   }
 
@@ -74,30 +64,16 @@ export class BetRepository {
   /**
    * 베팅 생성 + 라운드 풀 Atomic 업데이트
    *
-   * 전략:
-   * 1. D1 환경: db.batch() 사용 (Interactive Tx 불가). 조건 불만족 시 보상 트랜잭션 수행.
-   * 2. Local 환경: db.transaction() 사용. 에러 발생 시 자동 롤백.
+   * D1 Batch 전략:
+   * - db.batch()로 3개 쿼리 원자적 실행 (Bet Insert, Round Update, User Update)
+   * - 조건 불만족 시 보상 트랜잭션으로 데이터 정합성 보장
+   * - Interactive Transaction 미지원으로 인한 D1의 제약사항
    *
    * @param input - 베팅 생성 입력
    * @returns 베팅 생성 결과
    */
   async create(input: CreateBetInput): Promise<{ bet: Bet; round: Round }> {
     const db = getDb();
-
-    if (this.isD1(db)) {
-      return this.createD1(db, input);
-    } else {
-      return this.createLocal(db, input);
-    }
-  }
-
-  /**
-   * [Production] D1 환경용 배치 실행
-   */
-  private async createD1(
-    db: RemoteDrizzleClient,
-    input: CreateBetInput,
-  ): Promise<{ bet: Bet; round: Round }> {
     const { id, roundId, userId, prediction, amount, createdAt } = input;
     const now = Date.now();
 
@@ -204,88 +180,6 @@ export class BetRepository {
     } catch (error: unknown) {
       this.handleError(error);
       throw error; // Should be unreachable due to handleError throwing
-    }
-  }
-
-  /**
-   * [Local/Dev] 로컬 SQLite 환경용 트랜잭션 실행
-   */
-  private createLocal(db: LocalDrizzleClient, input: CreateBetInput): { bet: Bet; round: Round } {
-    const { id, roundId, userId, prediction, amount, createdAt } = input;
-    const now = Date.now();
-
-    try {
-      // better-sqlite3 transaction은 동기 함수여야 함 (async/await 사용 불가)
-      return db.transaction((tx: LocalDrizzleClient) => {
-        // 1. Insert Bet
-        const betResult = tx
-          .insert(bets)
-          .values({
-            id,
-            roundId,
-            userId,
-            prediction,
-            amount,
-            currency: 'DEL',
-            resultStatus: 'PENDING',
-            settlementStatus: 'PENDING',
-            createdAt,
-            processedAt: now,
-          })
-          .returning()
-          .all();
-
-        const createdBet = betResult[0];
-
-        // 2. Update Round Pool (Atomic)
-        const roundResult = tx
-          .update(rounds)
-          .set({
-            totalPool: sql`${rounds.totalPool} + ${amount}`,
-            totalGoldBets:
-              prediction === 'GOLD'
-                ? sql`${rounds.totalGoldBets} + ${amount}`
-                : rounds.totalGoldBets,
-            totalBtcBets:
-              prediction === 'BTC' ? sql`${rounds.totalBtcBets} + ${amount}` : rounds.totalBtcBets,
-            totalBetsCount: sql`${rounds.totalBetsCount} + 1`,
-            updatedAt: now,
-          })
-          .where(and(eq(rounds.id, roundId), eq(rounds.status, 'BETTING_OPEN')))
-          .returning()
-          .all();
-
-        const updatedRound = roundResult[0];
-
-        if (!updatedRound) {
-          throw new Error('Round is not accepting bets');
-        }
-
-        // 3. Update User Balance
-        const userResult = tx
-          .update(users)
-          .set({
-            delBalance: sql`${users.delBalance} - ${amount}`,
-            totalBets: sql`${users.totalBets} + 1`,
-            totalVolume: sql`${users.totalVolume} + ${amount}`,
-            updatedAt: now,
-          })
-          .where(and(eq(users.id, userId), sql`${users.delBalance} >= ${amount}`))
-          .run();
-
-        // better-sqlite3의 경우 run() 결과에 changes가 포함됨.
-        const userRowsAffected = userResult.changes ?? 0;
-
-        if (userRowsAffected === 0) {
-          // 로컬에서는 throw하면 전체 트랜잭션이 롤백되므로 보상 트랜잭션 불필요
-          throw new Error('Insufficient balance');
-        }
-
-        return { bet: createdBet, round: updatedRound };
-      });
-    } catch (error: unknown) {
-      this.handleError(error);
-      throw error;
     }
   }
 

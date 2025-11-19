@@ -71,7 +71,6 @@ export class BetService {
 
     try {
       // 5. 베팅 생성 (Repository)
-      // (tx 미지원으로 부득이하게 repository에서 수행)
       // Repository에서 다음을 Atomic하게 수행:
       // - Bet Insert (Conditional)
       // - Round Pool Update (Conditional)
