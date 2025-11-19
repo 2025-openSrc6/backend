@@ -203,11 +203,11 @@ export class RoundService {
     const startTime = validated.startTime;
     const type = validated.type as RoundType;
 
-    const roundDurationMs = ROUND_DURATIONS_MS[type];
-    const bettingDurationMs = BETTING_DURATIONS_MS[type];
+    // [개발용 임시] cron job 구현 후 status 제거
+    const status = validated.status as RoundStatus | undefined;
 
-    const endTime = startTime + roundDurationMs;
-    const lockTime = startTime + bettingDurationMs;
+    const endTime = startTime + ROUND_DURATIONS_MS[type];
+    const lockTime = startTime + BETTING_DURATIONS_MS[type];
 
     // 3. 중복 체크 + roundNumber 증가 + 삽입
     // 주의: 트랜잭션 지원 안함
@@ -236,7 +236,7 @@ export class RoundService {
         id: generateUUID(),
         roundNumber,
         type,
-        status: 'SCHEDULED',
+        status: status ?? 'SCHEDULED',
         startTime,
         endTime,
         lockTime,
