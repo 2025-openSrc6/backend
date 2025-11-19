@@ -38,7 +38,7 @@ export default function HomePage() {
       : walletAddress;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
+    <div className="relative min-h-screen overflow-hidden bg-[#02040a] text-slate-50 px-2 py-3 sm:px-4 sm:py-6">
       {/* 배경 그라디언트 */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-40 top-[-10rem] h-72 w-72 rounded-full bg-cyan-500/15 blur-3xl" />
@@ -47,12 +47,12 @@ export default function HomePage() {
       </div>
 
       {/* 전체 레이아웃 컨테이너 */}
-      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-3 pb-8 pt-3 lg:px-6">
+      <div className="relative mx-auto flex min-h-[calc(100vh-2rem)] max-w-6xl flex-col rounded-[32px] px-3 pb-6 pt-3 shadow-[0_0_80px_rgba(0,0,0,0.85)] lg:px-6">
         {/* 상단 글로벌 헤더 */}
-        <header className="mb-4 flex items-center justify-between rounded-2xl border border-slate-800/80 bg-slate-950/70 px-4 py-3 shadow-lg shadow-black/40 backdrop-blur-md lg:px-5">
+        <header className="mb-3 flex items-center justify-between rounded-[24px] border border-slate-800/80 bg-slate-950/80 px-4 shadow-lg shadow-black/40 backdrop-blur-md lg:px-5">
           {/* 로고 + 타이틀 */}
           <div className="flex items-center gap-3">
-            <div className="relative h-20 w-20 overflow-hidden rounded-xl">
+            <div className="relative h-18 w-18 overflow-hidden rounded-2xl ">
               <Image
                 src="/logo.png"
                 alt="DeltaX Logo"
@@ -64,10 +64,6 @@ export default function HomePage() {
             <div className="flex flex-col leading-tight">
               <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-sm font-extrabold tracking-[0.22em] text-transparent lg:text-base">
                 DELTA X
-              </span>
-              <span className="flex items-center gap-1 text-[11px] font-medium text-slate-400">
-                <Activity className="h-3 w-3 text-cyan-400" />
-                GOLD vs BTC VOLATILITY ARENA
               </span>
             </div>
           </div>
@@ -125,10 +121,107 @@ export default function HomePage() {
         </header>
 
         {/* 메인 그리드: 좌측 마켓 / 중앙 차트 / 우측 내 정보 */}
-        <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,2fr)_minmax(0,1.3fr)]">
-          {/* 좌측: 마켓 요약 / 공지 */}
+        <div className="mt-3 grid flex-1 gap-4 rounded-[24px] bg-slate-950/60 p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,2fr)_minmax(0,1.3fr)] lg:p-4">
+
+          {/* 중앙: 차트 & 라운드 요약 (Basevol 메인 영역 느낌) */}
+          <section className="flex flex-col gap-4 lg:col-span-2">
+            {/* 상단: 라운드/타임프레임 헤더 */}
+            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-xl shadow-black/40">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-slate-300">
+                    <Sparkles className="h-3 w-3 text-cyan-400" /> 실시간 라운드 현황
+                  </div>
+                  <h1 className="mt-2 text-lg font-semibold text-slate-50 lg:text-xl">
+                    {timeframe === '1D' && '1 DAY 라운드 변동성 차트'}
+                    {timeframe === '6H' && '6 HOUR 라운드 변동성 차트'}
+                    {timeframe === '1M' && '1 MIN 라운드 스캘핑 차트'}
+                  </h1>
+                </div>
+              </div>
+
+              <DashboardMiniChart />
+            </Card>
+
+            {/* 하단: 랭킹 보드 */}
+            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-xl shadow-black/40">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-200">Leaderboard 🏆</h2>
+                  <p className="text-[11px] text-slate-500">
+                    DEL 보유량 + NFT/뱃지 등 Achievements의 총자산 기준 상위 유저입니다.
+                  </p>
+                </div>
+                <span className="rounded-full bg-slate-900/80 px-2 py-1 text-[10px] text-slate-400">
+                  데모 랭킹
+                </span>
+              </div>
+
+              <RankingList />
+            </Card>
+          </section>
+
+          {/* 우측: 내 계정 / 포인트 / 퀵 액션 */}
           <section className="flex flex-col gap-4">
-            <Card className="border border-slate-800/80 bg-slate-950/80 p-4 shadow-lg shadow-black/40">
+            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-lg shadow-black/40">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-200">내 계정 상태</h3>
+                {isConnected && (
+                  <div className="flex items-center gap-1.5 rounded-full bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
+                    <Zap className="h-3 w-3 text-cyan-400" />
+                    {points.toLocaleString()} PTS
+                  </div>
+                )}
+              </div>
+              <AccountConnectCard
+                isConnected={isConnected}
+                walletAddress={walletAddress}
+                onConnect={handleConnect}
+                onDisconnect={handleDisconnect}
+              />
+            </Card>
+
+            <PointsPanel points={points} />
+
+            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-lg shadow-black/40">
+              <h3 className="mb-3 border-b border-slate-800 pb-2 text-sm font-semibold text-slate-200">
+                Quick Actions ⚡
+              </h3>
+              <div className="flex flex-col gap-2.5">
+                <Button className="w-full justify-between rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/30 hover:from-cyan-400 hover:to-emerald-400 hover:shadow-cyan-400/40">
+                  오늘 라운드 참여
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between rounded-xl border-purple-500/40 bg-slate-950/60 text-xs font-semibold text-purple-200 hover:bg-slate-900/80"
+                >
+                  NFT 상점 보기
+                  <Wallet className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between rounded-xl border-slate-700 bg-slate-950/60 text-[11px] font-medium text-slate-200 hover:bg-slate-900/80"
+                >
+                  지난 라운드 히스토리
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/90 p-3 text-[11px] text-slate-400 shadow-xl shadow-black/40">
+              <div className="mb-1 flex items-center gap-2 font-semibold uppercase tracking-wide text-slate-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                랭킹 산정 기준 (요약)
+              </div>
+              <ul className="space-y-1">
+                <li>• users.del 보유량 + achievements(보유 NFT/뱃지 등) 가치 합산.</li>
+                <li>• 타임프레임에 따라 최근 라운드 수익률을 보조 지표로 확장 예정.</li>
+                <li>• API 스펙과 정확한 공식은 별도 문서로 관리합니다.</li>
+              </ul>
+            </Card>
+
+            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-lg shadow-black/40">
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
                   <BarChart3 className="h-4 w-4 text-cyan-400" />
@@ -158,126 +251,6 @@ export default function HomePage() {
                   <span className="font-mono text-xs text-cyan-300">1,234,000</span>
                 </div>
               </div>
-            </Card>
-
-            <Card className="border border-slate-800/80 bg-slate-950/80 p-4 text-xs text-slate-400 shadow-lg shadow-black/40">
-              <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                <Sparkles className="h-3 w-3 text-cyan-400" />
-                오늘의 하이라이트
-              </div>
-              <ul className="space-y-1 leading-relaxed">
-                <li>• 1DAY 라운드 기준으로 랭킹이 집계됩니다.</li>
-                <li>• 상위 티어(총자산 기준) 유저에게 주간 보상 이벤트가 열립니다.</li>
-                <li>• 실제 온체인/실거래 데이터 연동 전까지는 모든 수치가 데모입니다.</li>
-              </ul>
-            </Card>
-          </section>
-
-          {/* 중앙: 차트 & 라운드 요약 (Basevol 메인 영역 느낌) */}
-          <section className="flex flex-col gap-4">
-            {/* 상단: 라운드/타임프레임 헤더 */}
-            <Card className="border border-slate-800/80 bg-slate-950/80 p-4 shadow-xl shadow-black/40">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-slate-300">
-                    <Sparkles className="h-3 w-3 text-cyan-400" /> 실시간 라운드 현황
-                  </div>
-                  <h1 className="mt-2 text-lg font-semibold text-slate-50 lg:text-xl">
-                    {timeframe === '1D' && '1 DAY 라운드 변동성 차트'}
-                    {timeframe === '6H' && '6 HOUR 라운드 변동성 차트'}
-                    {timeframe === '1M' && '1 MIN 라운드 스캘핑 차트'}
-                  </h1>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    GOLD / BTC 가격 스냅샷을 기반으로 한 델타 게임 시나리오를 시각화합니다.
-                  </p>
-                </div>
-                <div className="hidden text-right text-xs text-slate-400 sm:block">
-                  <div>현재 선택: <span className="font-semibold text-cyan-300">{timeframe}</span></div>
-                  <div className="text-[11px] text-slate-500">실데이터 연동 시 API 기준으로 갱신 예정</div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-800/80 bg-slate-950/80 p-3">
-                <DashboardMiniChart />
-              </div>
-            </Card>
-
-            {/* 하단: 랭킹 보드 */}
-            <Card className="border border-slate-800/80 bg-slate-950/80 p-4 shadow-xl shadow-black/40">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-200">Leaderboard 🏆</h2>
-                  <p className="text-[11px] text-slate-500">
-                    DEL 보유량 + NFT/뱃지 등 Achievements의 총자산 기준 상위 유저입니다.
-                  </p>
-                </div>
-                <span className="rounded-full bg-slate-900/80 px-2 py-1 text-[10px] text-slate-400">
-                  데모 랭킹
-                </span>
-              </div>
-
-              <RankingList />
-            </Card>
-          </section>
-
-          {/* 우측: 내 계정 / 포인트 / 퀵 액션 */}
-          <section className="flex flex-col gap-4">
-            <Card className="border border-slate-800/80 bg-slate-950/80 p-4 shadow-lg shadow-black/40">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-200">내 계정 상태</h3>
-                {isConnected && (
-                  <div className="flex items-center gap-1.5 rounded-full bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
-                    <Zap className="h-3 w-3 text-cyan-400" />
-                    {points.toLocaleString()} PTS
-                  </div>
-                )}
-              </div>
-              <AccountConnectCard
-                isConnected={isConnected}
-                walletAddress={walletAddress}
-                onConnect={handleConnect}
-                onDisconnect={handleDisconnect}
-              />
-            </Card>
-
-            <PointsPanel points={points} />
-
-            <Card className="border border-slate-800/80 bg-slate-950/80 p-4 shadow-lg shadow-black/40">
-              <h3 className="mb-3 border-b border-slate-800 pb-2 text-sm font-semibold text-slate-200">
-                Quick Actions ⚡
-              </h3>
-              <div className="flex flex-col gap-2.5">
-                <Button className="w-full justify-between rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-xs font-semibold text-slate-950 shadow-md shadow-cyan-500/30 hover:from-cyan-400 hover:to-emerald-400 hover:shadow-cyan-400/40">
-                  오늘 라운드 참여
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between rounded-xl border-purple-500/40 bg-slate-950/60 text-xs font-semibold text-purple-200 hover:bg-slate-900/80"
-                >
-                  NFT 상점 보기
-                  <Wallet className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between rounded-xl border-slate-700 bg-slate-950/60 text-[11px] font-medium text-slate-200 hover:bg-slate-900/80"
-                >
-                  지난 라운드 히스토리
-                  <ArrowRight className="h-3 w-3" />
-                </Button>
-              </div>
-            </Card>
-
-            <Card className="border border-slate-800/80 bg-slate-950/90 p-3 text-[11px] text-slate-400 shadow-xl shadow-black/40">
-              <div className="mb-1 flex items-center gap-2 font-semibold uppercase tracking-wide text-slate-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                랭킹 산정 기준 (요약)
-              </div>
-              <ul className="space-y-1">
-                <li>• users.del 보유량 + achievements(보유 NFT/뱃지 등) 가치 합산.</li>
-                <li>• 타임프레임에 따라 최근 라운드 수익률을 보조 지표로 확장 예정.</li>
-                <li>• API 스펙과 정확한 공식은 별도 문서로 관리합니다.</li>
-              </ul>
             </Card>
           </section>
         </div>
