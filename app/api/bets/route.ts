@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     // 1. Request Body 파싱
     const body = await request.json();
 
-    // TODO: 2. 유저 인증
+    // TODO: 2. 유저 인증 및 검증
     // const session = await getSession(request);
     // const userId = session.userId;
     const userId = 'mock-user-id';

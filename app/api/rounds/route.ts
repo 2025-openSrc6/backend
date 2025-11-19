@@ -99,13 +99,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // TODO: 2. 권한 체크 (Admin 전용)
-    // const session = await getSession(request);
-    // if (!session || session.role !== 'ADMIN') {
-    //   throw new ForbiddenError('Admin role required');
-    // }
 
-    // 3. Service 호출 (registry에서 조립된 인스턴스 사용)
-    // Service에서 다음 작업 수행:
+    // 3. Service 호출
     // - 입력 검증 (Zod)
     // - endTime, lockTime 자동 계산
     // - roundNumber 자동 증가
