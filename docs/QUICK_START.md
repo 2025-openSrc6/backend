@@ -53,16 +53,19 @@ curl -X POST http://localhost:3000/api/bets \
 ## 📊 자주 사용할 API
 
 ### 모든 라운드 보기
+
 ```bash
 curl http://localhost:3000/api/rounds
 ```
 
 ### 라운드 1의 베팅 보기
+
 ```bash
 curl "http://localhost:3000/api/bets?roundId=1"
 ```
 
 ### DB 연결 확인
+
 ```bash
 curl http://localhost:3000/api/health
 ```
@@ -81,6 +84,7 @@ curl -X POST http://localhost:3000/api/rounds \
 ```
 
 **응답 예시:**
+
 ```json
 {
   "success": true,
@@ -111,12 +115,12 @@ curl -X POST http://localhost:3000/api/bets \
 
 ## ⚠️ 일반적인 실수
 
-| 에러 | 해결 방법 |
-|------|---------|
-| `Port 3000 already in use` | `npm run dev -- -p 3001` |
-| `Cannot find .env.local` | `cp .env.example .env.local` |
+| 에러                        | 해결 방법                                       |
+| --------------------------- | ----------------------------------------------- |
+| `Port 3000 already in use`  | `npm run dev -- -p 3001`                        |
+| `Cannot find .env.local`    | `cp .env.example .env.local`                    |
 | `D1 database not available` | `.env.local` 파일 확인 및 CLOUDFLARE_D1_ID 확인 |
-| `roundId not found` | 먼저 라운드를 만들고 반환된 ID 사용 |
+| `roundId not found`         | 먼저 라운드를 만들고 반환된 ID 사용             |
 
 ## 🔗 더 자세한 정보
 

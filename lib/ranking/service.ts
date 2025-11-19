@@ -22,14 +22,12 @@ export async function getRanking(limit: number): Promise<RankingItem[]> {
     const userId = row.userId;
     if (!userId) continue;
 
-    const existing =
-      byUser.get(userId) ??
-      {
-        walletAddress: row.walletAddress ?? '',
-        delBalance: Number(row.delBalance ?? 0),
-        achievementTotal: 0,
-        totalAsset: 0,
-      };
+    const existing = byUser.get(userId) ?? {
+      walletAddress: row.walletAddress ?? '',
+      delBalance: Number(row.delBalance ?? 0),
+      achievementTotal: 0,
+      totalAsset: 0,
+    };
 
     const price = Number(row.achievementPurchasePrice ?? 0);
     existing.achievementTotal += price;

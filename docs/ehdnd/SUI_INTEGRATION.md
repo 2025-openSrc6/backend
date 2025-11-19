@@ -23,6 +23,7 @@ deltaX 베팅 시스템의 Sui 블록체인 통합 전략 및 Move 컨트랙트 
 ### 하이브리드 아키텍처
 
 **역할 분담**
+
 ```
 ┌─────────────────────────────────────┐
 │         Sui Blockchain              │
@@ -47,14 +48,14 @@ deltaX 베팅 시스템의 Sui 블록체인 통합 전략 및 Move 컨트랙트 
 
 ### Sui 선택 이유
 
-| 특징          | Sui               | Ethereum          | Solana            |
-| ------------- | ----------------- | ----------------- | ----------------- |
-| **TPS**       | 120,000+          | 15-20             | 50,000+           |
-| **최종성**    | 0.5초             | 12-15초           | 0.4초             |
-| **가스비**    | ~$0.001           | $5-50             | $0.00025          |
-| **병렬 처리** | ✅ Object-based   | ❌                | ✅                |
-| **안전성**    | Move 언어         | Solidity          | Rust              |
-| **안정성**    | ✅                | ✅                | ⚠️ (간헐적 중단)  |
+| 특징          | Sui             | Ethereum | Solana           |
+| ------------- | --------------- | -------- | ---------------- |
+| **TPS**       | 120,000+        | 15-20    | 50,000+          |
+| **최종성**    | 0.5초           | 12-15초  | 0.4초            |
+| **가스비**    | ~$0.001         | $5-50    | $0.00025         |
+| **병렬 처리** | ✅ Object-based | ❌       | ✅               |
+| **안전성**    | Move 언어       | Solidity | Rust             |
+| **안정성**    | ✅              | ✅       | ⚠️ (간헐적 중단) |
 
 **결론**: 빠르고 저렴하며 안정적 → **Sui 채택**
 
@@ -89,10 +90,10 @@ deltax/
 module deltax::del_coin {
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::url;
-    
+
     /// One-Time Witness (OTW)
     struct DEL has drop {}
-    
+
     /// Witness 패턴으로 한 번만 초기화
     fun init(witness: DEL, ctx: &mut TxContext) {
         let (treasury, metadata) = coin::create_currency(
@@ -104,10 +105,10 @@ module deltax::del_coin {
             option::some(url::new_unsafe_from_bytes(b"https://deltax.app/logo.png")),
             ctx
         );
-        
+
         // TreasuryCap을 Admin에게 전송
         transfer::public_transfer(treasury, tx_context::sender(ctx));
-        
+
         // CoinMetadata를 공유 객체로 등록
         transfer::public_freeze_object(metadata);
     }
@@ -117,6 +118,7 @@ module deltax::del_coin {
 #### 주요 함수
 
 **mint (Admin 전용)**
+
 ```rust
 public fun mint(
     treasury: &mut TreasuryCap<DEL>,
@@ -128,6 +130,7 @@ public fun mint(
 ```
 
 **burn (소각)**
+
 ```rust
 public fun burn(
     treasury: &mut TreasuryCap<DEL>,
@@ -138,6 +141,7 @@ public fun burn(
 ```
 
 **사용 시나리오**
+
 1. **출석 보상**: Admin이 5,000 DEL mint → 유저에게 전송
 2. **정산**: Settlement에서 승자에게 배당 mint
 3. **소각**: 필요 시 (예: 디플레이션 정책)
@@ -155,7 +159,7 @@ module deltax::betting {
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
     use deltax::del_coin::DEL;
-    
+
     /// 개별 베팅
     struct Bet has key, store {
         id: UID,
@@ -166,36 +170,36 @@ module deltax::betting {
         timestamp: u64,
         locked: bool,
     }
-    
+
     /// 라운드별 베팅 풀
     struct BettingPool has key {
         id: UID,
         round_id: u64,
         round_type: vector<u8>,     // "6HOUR", "1DAY"
-        
+
         // 풀 잔액
         total_balance: Balance<DEL>,
         gold_balance: Balance<DEL>,
         btc_balance: Balance<DEL>,
-        
+
         // 통계
         total_pool: u64,
         gold_pool: u64,
         btc_pool: u64,
         total_bets: u64,
-        
+
         // 상태
         status: u8,                 // 1=OPEN, 2=LOCKED, 3=SETTLED
-        
+
         // 시간
         start_time: u64,
         end_time: u64,
         lock_time: u64,
-        
+
         // Admin
         admin: address,
     }
-    
+
     /// 베팅 생성 이벤트
     struct BetPlaced has copy, drop {
         bet_id: ID,
@@ -211,6 +215,7 @@ module deltax::betting {
 #### 주요 함수
 
 **1. create_pool (Admin)**
+
 ```rust
 public fun create_pool(
     round_id: u64,
@@ -238,17 +243,18 @@ public fun create_pool(
         lock_time,
         admin,
     };
-    
+
     let pool_id = object::uid_to_inner(&pool.id);
-    
+
     // 공유 객체로 등록 (누구나 접근 가능)
     transfer::share_object(pool);
-    
+
     pool_id
 }
 ```
 
 **2. place_bet (유저)**
+
 ```rust
 public fun place_bet(
     pool: &mut BettingPool,
@@ -260,13 +266,13 @@ public fun place_bet(
     // 1. 검증
     assert!(pool.status == 1, E_BETTING_CLOSED);
     assert!(prediction == 1 || prediction == 2, E_INVALID_PREDICTION);
-    
+
     let now = clock::timestamp_ms(clock) / 1000;
     assert!(now < pool.lock_time, E_BETTING_LOCKED);
-    
+
     let amount = coin::value(&payment);
     assert!(amount >= MIN_BET_AMOUNT, E_INSUFFICIENT_AMOUNT);
-    
+
     // 2. 베팅 생성
     let bet = Bet {
         id: object::new(ctx),
@@ -277,17 +283,17 @@ public fun place_bet(
         timestamp: now,
         locked: true,
     };
-    
+
     let bet_id = object::uid_to_inner(&bet.id);
-    
+
     // 3. 자금 Lock (풀에 추가)
     let payment_balance = coin::into_balance(payment);
     balance::join(&mut pool.total_balance, payment_balance);
-    
+
     // 4. 풀 업데이트
     pool.total_pool = pool.total_pool + amount;
     pool.total_bets = pool.total_bets + 1;
-    
+
     if (prediction == 1) {
         let gold_portion = balance::split(&mut pool.total_balance, amount);
         balance::join(&mut pool.gold_balance, gold_portion);
@@ -297,7 +303,7 @@ public fun place_bet(
         balance::join(&mut pool.btc_balance, btc_portion);
         pool.btc_pool = pool.btc_pool + amount;
     };
-    
+
     // 5. 이벤트 발생
     event::emit(BetPlaced {
         bet_id,
@@ -307,15 +313,16 @@ public fun place_bet(
         amount,
         timestamp: now,
     });
-    
+
     // 6. Bet 객체를 유저에게 전송 (소유권)
     transfer::public_transfer(bet, tx_context::sender(ctx));
-    
+
     bet_id
 }
 ```
 
 **3. lock_pool (Admin - Cron)**
+
 ```rust
 public fun lock_pool(
     pool: &mut BettingPool,
@@ -323,10 +330,10 @@ public fun lock_pool(
     clock: &Clock
 ) {
     assert!(pool.admin == admin_cap.admin, E_UNAUTHORIZED);
-    
+
     let now = clock::timestamp_ms(clock) / 1000;
     assert!(now >= pool.lock_time, E_TOO_EARLY);
-    
+
     pool.status = 2;        // LOCKED
 }
 ```
@@ -345,35 +352,35 @@ module deltax::settlement {
     use sui::balance::{Self, Balance};
     use deltax::del_coin::DEL;
     use deltax::betting::{BettingPool, Bet};
-    
+
     /// 정산 기록 (불변)
     struct Settlement has key {
         id: UID,
         round_id: u64,
-        
+
         // 가격 데이터 (정수로 저장, 예: 265050 = $2650.50)
         gold_start: u64,
         gold_end: u64,
         btc_start: u64,
         btc_end: u64,
-        
+
         // 승자
         winner: u8,             // 1=GOLD, 2=BTC, 3=DRAW
-        
+
         // 풀 정보
         total_pool: u64,
         winning_pool: u64,
         losing_pool: u64,
         platform_fee: u64,
-        
+
         // 배당
         payout_ratio: u64,      // 고정소수점 (예: 178 = 1.78배, scale=100)
         total_winners: u64,
-        
+
         // 타임스탬프
         settled_at: u64,
     }
-    
+
     /// 정산 완료 이벤트
     struct SettlementCompleted has copy, drop {
         settlement_id: ID,
@@ -389,6 +396,7 @@ module deltax::settlement {
 #### 주요 함수
 
 **1. finalize_round (Admin)**
+
 ```rust
 public fun finalize_round(
     pool: &mut BettingPool,
@@ -403,14 +411,14 @@ public fun finalize_round(
 ): ID {
     assert!(pool.admin == admin_cap.admin, E_UNAUTHORIZED);
     assert!(pool.status == 2, E_NOT_LOCKED);
-    
+
     let now = clock::timestamp_ms(clock) / 1000;
     assert!(now >= pool.end_time, E_TOO_EARLY);
-    
+
     // 1. 승자 판정
     let gold_change = calculate_change(gold_start, gold_end);
     let btc_change = calculate_change(btc_start, btc_end);
-    
+
     let winner = if (gold_change > btc_change) {
         1   // GOLD
     } else if (btc_change > gold_change) {
@@ -418,15 +426,15 @@ public fun finalize_round(
     } else {
         3   // DRAW
     };
-    
+
     // 2. 풀 정보
     let total_pool = pool.total_pool;
     let winning_pool = if (winner == 1) pool.gold_pool else pool.btc_pool;
     let losing_pool = if (winner == 1) pool.btc_pool else pool.gold_pool;
-    
+
     // 3. 수수료 계산
     let platform_fee = (total_pool * platform_fee_rate) / 100;
-    
+
     // 4. 배당 비율 (고정소수점, scale=100)
     let payout_pool = total_pool - platform_fee;
     let payout_ratio = if (winner == 3) {
@@ -436,7 +444,7 @@ public fun finalize_round(
     } else {
         0
     };
-    
+
     // 5. Settlement 객체 생성
     let settlement = Settlement {
         id: object::new(ctx),
@@ -454,12 +462,12 @@ public fun finalize_round(
         total_winners: 0,       // 배당 시 업데이트
         settled_at: now,
     };
-    
+
     let settlement_id = object::uid_to_inner(&settlement.id);
-    
+
     // 6. 풀 상태 변경
     pool.status = 3;            // SETTLED
-    
+
     // 7. 이벤트 발생
     event::emit(SettlementCompleted {
         settlement_id,
@@ -469,15 +477,16 @@ public fun finalize_round(
         total_winners: 0,
         settled_at: now,
     });
-    
+
     // 8. Settlement을 불변 객체로 공유
     transfer::share_object(settlement);
-    
+
     settlement_id
 }
 ```
 
 **2. distribute_payout (Admin - 개별 승자)**
+
 ```rust
 public fun distribute_payout(
     pool: &mut BettingPool,
@@ -489,39 +498,40 @@ public fun distribute_payout(
     assert!(pool.admin == admin_cap.admin, E_UNAUTHORIZED);
     assert!(pool.status == 3, E_NOT_SETTLED);
     assert!(bet.round_id == settlement.round_id, E_ROUND_MISMATCH);
-    
+
     // 1. 승자 검증
     assert!(bet.prediction == settlement.winner || settlement.winner == 3, E_NOT_WINNER);
     assert!(bet.locked, E_ALREADY_PAID);
-    
+
     // 2. 배당 계산
     let payout_amount = (bet.amount * settlement.payout_ratio) / 100;
-    
+
     // 3. 풀에서 배당금 추출
     let payout_balance = if (bet.prediction == 1) {
         balance::split(&mut pool.gold_balance, payout_amount)
     } else {
         balance::split(&mut pool.btc_balance, payout_amount)
     };
-    
+
     let payout_coin = coin::from_balance(payout_balance, ctx);
-    
+
     // 4. Bet 잠금 해제
     bet.locked = false;
-    
+
     // 5. Settlement 통계 업데이트
     settlement.total_winners = settlement.total_winners + 1;
-    
+
     // 6. Bet 객체 소각 (더 이상 불필요)
     let Bet { id, .. } = bet;
     object::delete(id);
-    
+
     // 7. 배당금을 유저에게 전송 (호출자가 처리)
     payout_coin
 }
 ```
 
 **Helper: 변동률 계산**
+
 ```rust
 fun calculate_change(start: u64, end: u64): u64 {
     if (end > start) {
@@ -579,18 +589,18 @@ import { SuiClient } from '@mysten/sui.js/client';
 
 export async function POST(req: Request) {
   const { roundId, prediction, amount, suiTxHash, suiBetObjectId } = await req.json();
-  
+
   // 1. Sui 트랜잭션 검증
   const suiClient = new SuiClient({ url: SUI_RPC_URL });
   const txResponse = await suiClient.getTransactionBlock({
     digest: suiTxHash,
-    options: { showEffects: true }
+    options: { showEffects: true },
   });
-  
+
   if (txResponse.effects?.status?.status !== 'success') {
     return Response.json({ error: 'Sui 트랜잭션 실패' }, { status: 400 });
   }
-  
+
   // 2. D1에 베팅 기록
   await db.insert(bets).values({
     id: generateUUID(),
@@ -602,18 +612,18 @@ export async function POST(req: Request) {
     suiTxHash,
     // ...
   });
-  
+
   // 3. 라운드 풀 업데이트 (Atomic)
-  await db.update(rounds)
+  await db
+    .update(rounds)
     .set({
       totalPool: sql`total_pool + ${amount}`,
-      totalGoldBets: prediction === 'GOLD' 
-        ? sql`total_gold_bets + ${amount}` 
-        : sql`total_gold_bets`,
+      totalGoldBets:
+        prediction === 'GOLD' ? sql`total_gold_bets + ${amount}` : sql`total_gold_bets`,
       // ...
     })
     .where(eq(rounds.id, roundId));
-  
+
   return Response.json({ success: true });
 }
 ```
@@ -691,7 +701,7 @@ import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 
 // 1. Admin Keypair 로드 (환경 변수)
 const adminKeypair = Ed25519Keypair.fromSecretKey(
-  Buffer.from(process.env.ADMIN_SECRET_KEY!, 'base64')
+  Buffer.from(process.env.ADMIN_SECRET_KEY!, 'base64'),
 );
 
 // 2. 유저 트랜잭션 생성
@@ -702,14 +712,14 @@ tx.moveCall({
     tx.object(poolId),
     tx.pure(prediction),
     tx.object(userDelCoinId),
-    tx.object('0x6'),       // Clock
+    tx.object('0x6'), // Clock
   ],
 });
 
 // 3. Admin이 Sponsor로 서명 및 전송
 const result = await suiClient.signAndExecuteTransactionBlock({
   transactionBlock: tx,
-  signer: adminKeypair,     // ← Admin이 가스비 지불
+  signer: adminKeypair, // ← Admin이 가스비 지불
   options: {
     showEffects: true,
     showObjectChanges: true,
@@ -742,9 +752,7 @@ const result = await suiClient.signAndExecuteTransactionBlock({
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 
 export const suiClient = new SuiClient({
-  url: getFullnodeUrl(
-    process.env.NODE_ENV === 'production' ? 'mainnet' : 'testnet'
-  ),
+  url: getFullnodeUrl(process.env.NODE_ENV === 'production' ? 'mainnet' : 'testnet'),
 });
 
 export const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID!;
@@ -760,7 +768,7 @@ export async function placeBetOnSui({
   poolId,
   prediction,
   userDelCoinId,
-  adminKeypair
+  adminKeypair,
 }: {
   poolId: string;
   prediction: 'GOLD' | 'BTC';
@@ -768,17 +776,17 @@ export async function placeBetOnSui({
   adminKeypair: Ed25519Keypair;
 }) {
   const tx = new TransactionBlock();
-  
+
   tx.moveCall({
     target: `${PACKAGE_ID}::betting::place_bet`,
     arguments: [
       tx.object(poolId),
       tx.pure(prediction === 'GOLD' ? 1 : 2, 'u8'),
       tx.object(userDelCoinId),
-      tx.object('0x6'),   // Clock
+      tx.object('0x6'), // Clock
     ],
   });
-  
+
   const result = await suiClient.signAndExecuteTransactionBlock({
     transactionBlock: tx,
     signer: adminKeypair,
@@ -787,16 +795,16 @@ export async function placeBetOnSui({
       showObjectChanges: true,
     },
   });
-  
+
   if (result.effects?.status?.status !== 'success') {
     throw new Error('Sui 트랜잭션 실패');
   }
-  
+
   // Bet Object ID 추출
   const betObjectChange = result.objectChanges?.find(
-    (change) => change.type === 'created' && change.objectType.includes('::Bet')
+    (change) => change.type === 'created' && change.objectType.includes('::Bet'),
   );
-  
+
   return {
     txHash: result.digest,
     betObjectId: betObjectChange?.objectId || '',
@@ -818,7 +826,7 @@ try {
 } catch (error) {
   // 1. 에러 로그 기록
   console.error('Sui bet failed:', error);
-  
+
   // 2. 유저에게 에러 반환 (D1에 기록 안 함)
   return Response.json({
     error: 'SUI_TX_FAILED',
@@ -845,14 +853,14 @@ try {
     betObjectId,
     error: error.message
   });
-  
+
   // 2. 복구 큐에 추가 (나중에 재시도)
   await addToRecoveryQueue({
     type: 'BET_SYNC',
     txHash,
     betObjectId,
   });
-  
+
   // 3. 유저에게 성공 반환 (Sui는 성공했으므로)
   return Response.json({
     success: true,
@@ -870,21 +878,15 @@ try {
 // 서버 재시작 시 복구 로직
 async function recoverIncompleteSettlements() {
   // 1. CALCULATING 상태인 라운드 찾기
-  const incompleteRounds = await db.select()
-    .from(rounds)
-    .where(eq(rounds.status, 'CALCULATING'));
-  
+  const incompleteRounds = await db.select().from(rounds).where(eq(rounds.status, 'CALCULATING'));
+
   for (const round of incompleteRounds) {
     // 2. 미정산 베팅 찾기
-    const pendingBets = await db.select()
+    const pendingBets = await db
+      .select()
       .from(bets)
-      .where(
-        and(
-          eq(bets.roundId, round.id),
-          eq(bets.settlementStatus, 'PENDING')
-        )
-      );
-    
+      .where(and(eq(bets.roundId, round.id), eq(bets.settlementStatus, 'PENDING')));
+
     // 3. 각 베팅에 대해 재정산
     for (const bet of pendingBets) {
       try {
@@ -909,7 +911,7 @@ async function recoverIncompleteSettlements() {
 #[test]
 fun test_place_bet() {
     let scenario = test_scenario::begin(@admin);
-    
+
     // 1. 풀 생성
     {
         let ctx = test_scenario::ctx(&mut scenario);
@@ -923,14 +925,14 @@ fun test_place_bet() {
             ctx
         );
     };
-    
+
     // 2. 베팅 생성
     test_scenario::next_tx(&mut scenario, @user1);
     {
         let pool = test_scenario::take_shared<BettingPool>(&scenario);
         let payment = coin::mint_for_testing<DEL>(1000, test_scenario::ctx(&mut scenario));
         let clock = clock::create_for_testing(test_scenario::ctx(&mut scenario));
-        
+
         betting::place_bet(
             &mut pool,
             1,          // GOLD
@@ -938,15 +940,15 @@ fun test_place_bet() {
             &clock,
             test_scenario::ctx(&mut scenario)
         );
-        
+
         // 검증
         assert!(betting::total_pool(&pool) == 1000, 0);
         assert!(betting::gold_pool(&pool) == 1000, 1);
-        
+
         test_scenario::return_shared(pool);
         clock::destroy_for_testing(clock);
     };
-    
+
     test_scenario::end(scenario);
 }
 ```
@@ -969,14 +971,14 @@ describe('POST /api/bets', () => {
         suiBetObjectId: 'mock_bet_id',
       }),
     });
-    
+
     const response = await POST(request);
     const data = await response.json();
-    
+
     expect(data.success).toBe(true);
     expect(data.data.bet.amount).toBe(1000);
   });
-  
+
   it('should fail when round is locked', async () => {
     // ...
   });
@@ -990,11 +992,13 @@ describe('POST /api/bets', () => {
 ### 1. Admin Keypair 관리
 
 **❌ 절대 하지 말 것**
+
 - Git에 커밋
 - 프론트엔드 노출
 - 로그에 출력
 
 **✅ 권장 사항**
+
 ```bash
 # .env (gitignore 필수)
 ADMIN_SECRET_KEY=base64_encoded_key
@@ -1006,11 +1010,12 @@ wrangler secret put ADMIN_SECRET_KEY
 ### 2. Sui 트랜잭션 검증
 
 **프론트엔드에서 받은 tx_hash를 무조건 검증**
+
 ```typescript
 // 1. 트랜잭션 조회
 const txResponse = await suiClient.getTransactionBlock({
   digest: suiTxHash,
-  options: { showEffects: true, showObjectChanges: true }
+  options: { showEffects: true, showObjectChanges: true },
 });
 
 // 2. 성공 여부 확인
@@ -1019,9 +1024,7 @@ if (txResponse.effects?.status?.status !== 'success') {
 }
 
 // 3. 베팅 내용 검증 (금액, 예측 등)
-const betEvent = txResponse.events?.find(e => 
-  e.type.includes('::BetPlaced')
-);
+const betEvent = txResponse.events?.find((e) => e.type.includes('::BetPlaced'));
 
 if (betEvent.parsedJson.amount !== amount) {
   throw new Error('Amount mismatch');
@@ -1031,25 +1034,26 @@ if (betEvent.parsedJson.amount !== amount) {
 ### 3. Rate Limiting
 
 **Sponsored Transaction 남용 방지**
+
 ```typescript
 // lib/rate-limit.ts
 const rateLimiter = new Map<string, number[]>();
 
 export function checkRateLimit(userId: string): boolean {
   const now = Date.now();
-  const window = 60 * 1000;  // 1분
-  const maxRequests = 10;    // 최대 10 베팅/분
-  
+  const window = 60 * 1000; // 1분
+  const maxRequests = 10; // 최대 10 베팅/분
+
   const timestamps = rateLimiter.get(userId) || [];
-  const recentTimestamps = timestamps.filter(t => now - t < window);
-  
+  const recentTimestamps = timestamps.filter((t) => now - t < window);
+
   if (recentTimestamps.length >= maxRequests) {
-    return false;  // Rate limit exceeded
+    return false; // Rate limit exceeded
   }
-  
+
   recentTimestamps.push(now);
   rateLimiter.set(userId, recentTimestamps);
-  
+
   return true;
 }
 ```

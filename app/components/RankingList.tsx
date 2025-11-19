@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 
 // 데이터 타입
@@ -19,18 +19,18 @@ export function RankingList() {
     async function fetchRanking() {
       try {
         // GET /api/rankings?limit=20 호출
-        const res = await fetch("/api/rankings?limit=20", {
-          method: "GET",
+        const res = await fetch('/api/rankings?limit=20', {
+          method: 'GET',
         });
 
         if (!res.ok) {
-          throw new Error("랭킹 오류");
+          throw new Error('랭킹 오류');
         }
 
         const data = await res.json();
         setRanking(data); // 받아온 배열 set
       } catch (err) {
-        console.error("[RankingList] API ERROR:", err);
+        console.error('[RankingList] API ERROR:', err);
       } finally {
         setLoading(false);
       }

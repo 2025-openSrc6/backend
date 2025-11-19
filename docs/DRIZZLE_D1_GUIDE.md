@@ -20,6 +20,7 @@
 ### Drizzle ORM이란?
 
 **Drizzle**은 TypeScript/JavaScript용 경량 ORM(Object-Relational Mapping)으로:
+
 - 타입 안전성을 제공합니다
 - SQL과 유사한 문법으로 직관적입니다
 - Cloudflare D1을 완벽하게 지원합니다
@@ -27,6 +28,7 @@
 ### Cloudflare D1이란?
 
 **D1**은 Cloudflare가 제공하는 서버리스 SQLite 데이터베이스로:
+
 - 복잡한 설정 없이 바로 사용 가능
 - 에지 네트워크에 배포되어 빠른 응답 속도
 - Wrangler CLI로 쉽게 관리
@@ -62,8 +64,8 @@ backend/
 ### 기본 패턴
 
 ```typescript
-import { getDbFromContext } from "@/lib/db";
-import { rounds } from "@/db/schema";
+import { getDbFromContext } from '@/lib/db';
+import { rounds } from '@/db/schema';
 
 export async function GET(request: Request, context: any) {
   try {
@@ -76,10 +78,7 @@ export async function GET(request: Request, context: any) {
     // 3. 응답 반환
     return Response.json({ success: true, data });
   } catch (error) {
-    return Response.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 ```
@@ -106,50 +105,40 @@ const db = getDbFromContext(context);
 const allRounds = await db.select().from(rounds);
 
 // 조건으로 조회
-import { eq } from "drizzle-orm";
-const activeRounds = await db
-  .select()
-  .from(rounds)
-  .where(eq(rounds.status, "active"));
+import { eq } from 'drizzle-orm';
+const activeRounds = await db.select().from(rounds).where(eq(rounds.status, 'active'));
 
 // 특정 ID로 조회
-const round = await db
-  .select()
-  .from(rounds)
-  .where(eq(rounds.id, 1))
-  .limit(1);
+const round = await db.select().from(rounds).where(eq(rounds.id, 1)).limit(1);
 ```
 
 ### 2️⃣ INSERT (삽입)
 
 ```typescript
-import { NewRound } from "@/db/schema";
+import { NewRound } from '@/db/schema';
 
 const newData: NewRound = {
-  roundKey: "round_001",
-  timeframe: "1h",
+  roundKey: 'round_001',
+  timeframe: '1h',
   lockingStartsAt: Date.now(),
   lockingEndsAt: Date.now() + 3600000,
 };
 
-const result = await db
-  .insert(rounds)
-  .values(newData)
-  .returning();
+const result = await db.insert(rounds).values(newData).returning();
 
-console.log("생성된 라운드:", result[0]);
+console.log('생성된 라운드:', result[0]);
 ```
 
 ### 3️⃣ UPDATE (수정)
 
 ```typescript
-import { eq } from "drizzle-orm";
+import { eq } from 'drizzle-orm';
 
 const updated = await db
   .update(rounds)
   .set({
-    status: "settled",
-    settledAt: Date.now()
+    status: 'settled',
+    settledAt: Date.now(),
   })
   .where(eq(rounds.id, 1))
   .returning();
@@ -158,18 +147,15 @@ const updated = await db
 ### 4️⃣ DELETE (삭제)
 
 ```typescript
-import { eq } from "drizzle-orm";
+import { eq } from 'drizzle-orm';
 
-const deleted = await db
-  .delete(bets)
-  .where(eq(bets.roundId, 1))
-  .returning();
+const deleted = await db.delete(bets).where(eq(bets.roundId, 1)).returning();
 ```
 
 ### 5️⃣ 조인 (JOIN)
 
 ```typescript
-import { eq } from "drizzle-orm";
+import { eq } from 'drizzle-orm';
 
 const roundWithBets = await db
   .select()
@@ -227,15 +213,13 @@ export async function GET(_request: Request, context: any) {
       data: allRounds,
     });
   } catch (error) {
-    return Response.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 ```
 
 **사용:**
+
 ```bash
 curl http://localhost:3000/api/rounds
 ```
@@ -258,20 +242,15 @@ export async function POST(request: Request, context: any) {
       })
       .returning();
 
-    return Response.json(
-      { success: true, data: result[0] },
-      { status: 201 }
-    );
+    return Response.json({ success: true, data: result[0] }, { status: 201 });
   } catch (error) {
-    return Response.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 ```
 
 **사용:**
+
 ```bash
 curl -X POST http://localhost:3000/api/rounds \
   -H "Content-Type: application/json" \
@@ -289,7 +268,7 @@ curl -X POST http://localhost:3000/api/rounds \
 export async function GET(request: Request, context: any) {
   try {
     const { searchParams } = new URL(request.url);
-    const roundId = searchParams.get("roundId");
+    const roundId = searchParams.get('roundId');
 
     const db = getDbFromContext(context);
 
@@ -305,15 +284,13 @@ export async function GET(request: Request, context: any) {
 
     return Response.json({ success: true, data: allBets });
   } catch (error) {
-    return Response.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    return Response.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 ```
 
 **사용:**
+
 ```bash
 # 특정 라운드의 베팅만 조회
 curl http://localhost:3000/api/bets?roundId=1
@@ -353,17 +330,17 @@ const bet: Bet = /* 쿼리 결과 */;
 Drizzle은 복잡한 쿼리도 지원합니다:
 
 ```typescript
-import { and, or, gte, lte } from "drizzle-orm";
+import { and, or, gte, lte } from 'drizzle-orm';
 
 const results = await db
   .select()
   .from(rounds)
   .where(
     and(
-      eq(rounds.status, "active"),
+      eq(rounds.status, 'active'),
       gte(rounds.createdAt, startDate),
-      lte(rounds.createdAt, endDate)
-    )
+      lte(rounds.createdAt, endDate),
+    ),
   );
 ```
 
@@ -373,7 +350,7 @@ const results = await db
 try {
   const data = await db.select().from(rounds);
 } catch (error) {
-  console.error("DB Error:", error);
+  console.error('DB Error:', error);
   // 에러 처리
 }
 ```

@@ -8,11 +8,13 @@
 ## 핵심 원칙: "필요한 만큼만"
 
 ### ✅ 반드시 적용
+
 1. **Controller-Service 분리** (필수)
 2. **입력 검증** (Zod)
 3. **에러 처리** (Custom Error Classes)
 
 ### ⚠️ 선택적 적용
+
 1. **Repository Layer** → 복잡한 쿼리만
 2. **테스트** → 중요한 로직만
 3. **문서화** → 복잡한 부분만
@@ -84,7 +86,7 @@ async getCurrentRound(): Promise<Round | null> {
 
 ## 레이어별 체크리스트
 
-### Controller Layer (app/api/*/route.ts)
+### Controller Layer (app/api/\*/route.ts)
 
 ```typescript
 export async function GET(request: NextRequest) {
@@ -109,7 +111,7 @@ export async function GET(request: NextRequest) {
 // - 직접 DB 접근 (Service/Repository에서)
 ```
 
-### Service Layer (lib/*/service.ts)
+### Service Layer (lib/\*/service.ts)
 
 ```typescript
 export class RoundService {
@@ -151,7 +153,7 @@ export class RoundService {
 }
 ```
 
-### Repository Layer (lib/*/repository.ts) - 선택적
+### Repository Layer (lib/\*/repository.ts) - 선택적
 
 ```typescript
 export class RoundRepository {
@@ -199,10 +201,7 @@ export class RoundRepository {
 
 ```typescript
 // app/api/bets/[id]/route.ts
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const bet = await registry.betService.getBetById(params.id);
     return createSuccessResponse({ bet });
@@ -365,13 +364,13 @@ export class BetRepository {
 
 ## 요약: 당신의 프로젝트 규모라면
 
-| 레이어 | 적용 수준 | 비고 |
-|--------|----------|------|
-| Controller | 100% | HTTP만 처리 |
-| Service | 100% | 비즈니스 로직 |
-| Repository | 30-50% | 복잡한 쿼리만 |
-| Shared Utils | 100% | 재사용 유틸 |
-| Tests | 50% | 핵심 로직만 |
+| 레이어       | 적용 수준 | 비고          |
+| ------------ | --------- | ------------- |
+| Controller   | 100%      | HTTP만 처리   |
+| Service      | 100%      | 비즈니스 로직 |
+| Repository   | 30-50%    | 복잡한 쿼리만 |
+| Shared Utils | 100%      | 재사용 유틸   |
+| Tests        | 50%       | 핵심 로직만   |
 
 **핵심**: "완벽한 아키텍처"보다 "빠른 배포 + 점진적 개선"
 

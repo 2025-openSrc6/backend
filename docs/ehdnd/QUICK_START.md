@@ -44,6 +44,7 @@ npm install zod
 ### Step 2: 확인 (10초)
 
 ✅ `app/api/rounds/route.ts`가 이미 업데이트되었습니다!
+
 - 의존성 조립 파일 사용
 - `registry.roundService.getRounds()` 호출
 
@@ -70,6 +71,7 @@ curl "http://localhost:3000/api/rounds?type=6HOUR&status=BETTING_OPEN"
 ```
 
 **예상 결과**:
+
 ```json
 {
   "success": true,
@@ -120,6 +122,7 @@ curl "http://localhost:3000/api/rounds?type=6HOUR&status=BETTING_OPEN"
 **GET /api/rounds/current** 구현:
 
 1. `lib/rounds/service.ts`에 메서드 추가:
+
 ```typescript
 async getCurrentRound(type: RoundType): Promise<Round | null> {
   const rounds = await this.repository.findMany({
@@ -138,6 +141,7 @@ async getCurrentRound(type: RoundType): Promise<Round | null> {
 ```
 
 2. `app/api/rounds/current/route.ts` 생성:
+
 ```typescript
 import { NextRequest } from 'next/server';
 import { RoundService } from '@/lib/rounds/service';
@@ -172,6 +176,7 @@ export async function GET(request: NextRequest) {
 **GET /api/rounds/:id** 구현:
 
 1. `app/api/rounds/[id]/route.ts` 생성:
+
 ```typescript
 import { NextRequest } from 'next/server';
 import { RoundService } from '@/lib/rounds/service';
@@ -179,10 +184,7 @@ import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
 
 const roundService = new RoundService();
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const round = await roundService.getRoundById(params.id);
     return createSuccessResponse({ round });
@@ -240,6 +242,7 @@ npm install zod
 ### 빌드 에러: "Cannot find module '@/lib/rounds/service'"
 
 TypeScript path alias 확인:
+
 ```json
 // tsconfig.json
 {
@@ -254,6 +257,7 @@ TypeScript path alias 확인:
 ### 런타임 에러: "getDb is not a function"
 
 `lib/db/index.ts` 확인:
+
 ```typescript
 export function getDb() {
   // ...
@@ -267,12 +271,14 @@ export function getDb() {
 ### 1. 원본 코드 분석 (1시간)
 
 `app/api/rounds/route.commented.ts` 읽기
+
 - 상세 주석으로 모든 로직 설명
 - 문제점 파악
 
 ### 2. 아키텍처 이해 (30분)
 
 `ARCHITECTURE_GUIDE.md` 읽기
+
 - Layered Architecture
 - 각 레이어의 책임
 - 코딩 컨벤션
@@ -280,6 +286,7 @@ export function getDb() {
 ### 3. 리팩토링 비교 (30분)
 
 `REFACTORING_GUIDE.md` 읽기
+
 - Before/After 비교
 - 메트릭 분석
 - 테스트 전략
@@ -291,11 +298,13 @@ export function getDb() {
 ### 1. 점진적 적용
 
 **Option A**: 새 API부터 적용
+
 - 기존 route.ts는 그대로 두고
 - GET /api/rounds/current부터 새 패턴 적용
 - 리스크 최소화
 
 **Option B**: 전체 리팩토링
+
 - 오늘 당장 route.ts 교체
 - 더 일관된 구조
 - 약간의 리스크
@@ -305,11 +314,13 @@ export function getDb() {
 ### 2. 테스트 작성
 
 Jest 설치:
+
 ```bash
 npm install -D jest @types/jest ts-jest
 ```
 
 Service 테스트 예시:
+
 ```typescript
 // lib/rounds/service.test.ts
 import { RoundService } from './service';
@@ -326,6 +337,7 @@ describe('RoundService', () => {
 ### 3. 코드 리뷰
 
 팀원 코드 리뷰 시 체크:
+
 - [ ] Controller는 HTTP만 처리하는가?
 - [ ] Service에 비즈니스 로직이 있는가?
 - [ ] Repository에서만 DB 접근하는가?
@@ -354,11 +366,13 @@ describe('RoundService', () => {
 ## 📞 질문/피드백
 
 리팩토링 관련 질문이나 개선 아이디어가 있다면:
+
 - Slack #dev 채널
 - GitHub Issues
 - 직접 코드 리뷰 요청
 
 **참고 문서**:
+
 - [ARCHITECTURE_GUIDE.md](./ARCHITECTURE_GUIDE.md)
 - [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md)
 - [API_SPECIFICATION.md](./API_SPECIFICATION.md)

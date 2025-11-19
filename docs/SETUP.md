@@ -56,6 +56,7 @@ npm run dev
 #### A. cURL 사용 (CLI)
 
 **라운드 추가:**
+
 ```bash
 curl -X POST http://localhost:3000/api/rounds \
   -H "Content-Type: application/json" \
@@ -68,6 +69,7 @@ curl -X POST http://localhost:3000/api/rounds \
 ```
 
 **베팅 추가:**
+
 ```bash
 curl -X POST http://localhost:3000/api/bets \
   -H "Content-Type: application/json" \
@@ -82,14 +84,17 @@ curl -X POST http://localhost:3000/api/bets \
 #### B. Postman 사용 (GUI)
 
 **Postman 설치:**
+
 - https://www.postman.com/downloads/ 에서 다운로드
 
 **라운드 추가:**
+
 1. Postman 열기
 2. `POST` 선택
 3. URL: `http://localhost:3000/api/rounds`
 4. `Body` → `raw` → `JSON` 선택
 5. 다음 JSON 입력:
+
 ```json
 {
   "roundKey": "round-2025-01-10-1h",
@@ -98,11 +103,14 @@ curl -X POST http://localhost:3000/api/bets \
   "lockingEndsAt": "2025-01-10T11:00:00Z"
 }
 ```
+
 6. `Send` 버튼 클릭
 
 **베팅 추가:**
+
 1. URL: `http://localhost:3000/api/bets`
 2. JSON 입력:
+
 ```json
 {
   "roundId": 1,
@@ -111,6 +119,7 @@ curl -X POST http://localhost:3000/api/bets \
   "amount": "100.50"
 }
 ```
+
 3. `Send` 버튼 클릭
 
 ### 방법 2: 웹 UI를 통한 추가
@@ -121,12 +130,13 @@ curl -X POST http://localhost:3000/api/bets \
 
 ### 라운드 (Rounds)
 
-| 메서드 | 엔드포인트 | 설명 |
-|--------|-----------|------|
-| GET | `/api/rounds` | 모든 라운드 조회 |
-| POST | `/api/rounds` | 새 라운드 생성 |
+| 메서드 | 엔드포인트    | 설명             |
+| ------ | ------------- | ---------------- |
+| GET    | `/api/rounds` | 모든 라운드 조회 |
+| POST   | `/api/rounds` | 새 라운드 생성   |
 
 **라운드 객체 예제:**
+
 ```json
 {
   "roundKey": "round-2025-01-10-1h",
@@ -139,12 +149,13 @@ curl -X POST http://localhost:3000/api/bets \
 
 ### 베팅 (Bets)
 
-| 메서드 | 엔드포인트 | 설명 |
-|--------|-----------|------|
-| GET | `/api/bets?roundId=1` | 라운드별 베팅 조회 |
-| POST | `/api/bets` | 새 베팅 생성 |
+| 메서드 | 엔드포인트            | 설명               |
+| ------ | --------------------- | ------------------ |
+| GET    | `/api/bets?roundId=1` | 라운드별 베팅 조회 |
+| POST   | `/api/bets`           | 새 베팅 생성       |
 
 **베팅 객체 예제:**
+
 ```json
 {
   "roundId": 1,
@@ -157,9 +168,9 @@ curl -X POST http://localhost:3000/api/bets \
 
 ### 헬스 체크
 
-| 메서드 | 엔드포인트 | 설명 |
-|--------|-----------|------|
-| GET | `/api/health` | DB 연결 상태 확인 |
+| 메서드 | 엔드포인트    | 설명              |
+| ------ | ------------- | ----------------- |
+| GET    | `/api/health` | DB 연결 상태 확인 |
 
 ## 🔧 일반적인 작업
 

@@ -45,15 +45,17 @@ Response:
 ### 개선 사항
 
 **1. Request Body 간소화 (중요!)**
+
 - ✅ **개선**: `endTime`과 `lockTime`을 수동 입력 → 자동 계산
 - **이유**:
   - `type`에 따라 duration이 고정되어 있음 (6HOUR = 6시간, 1MIN = 1분 등)
   - 수동 입력 시 계산 실수 가능성 높음
   - API 호출이 더 간단해짐
 - **자동 계산 로직**:
+
   ```typescript
-  endTime = startTime + ROUND_DURATIONS[type]
-  lockTime = startTime + BETTING_DURATIONS[type]
+  endTime = startTime + ROUND_DURATIONS[type];
+  lockTime = startTime + BETTING_DURATIONS[type];
 
   // 예시: type = '6HOUR'
   // endTime = startTime + 6시간
@@ -61,12 +63,14 @@ Response:
   ```
 
 **2. Validation 간소화**
+
 - `type`: '1MIN' | '6HOUR' | '1DAY' 검증
 - `startTime`: 양수 Unix timestamp 검증
 - ~~`startTime < endTime` 검증~~ (자동 계산으로 불필요)
 - ~~`lockTime` 범위 검증~~ (자동 계산으로 불필요)
 
 **2. Response Body 개선**
+
 ```typescript
 {
   "success": true,
@@ -104,6 +108,7 @@ Response:
 ```
 
 **3. 에러 케이스 추가**
+
 ```typescript
 // 시간 검증 실패
 {
@@ -146,12 +151,14 @@ Response:
 ## 2. 구현 체크리스트
 
 ### Controller Layer (`app/api/rounds/route.ts`)
+
 - [ ] POST 핸들러 함수 추가
 - [ ] Request Body 파싱
 - [ ] Service 호출
 - [ ] 성공/실패 응답 반환
 
 ### Validation Layer (`lib/rounds/validation.ts`)
+
 - [ ] `createRoundSchema` 추가
   - [ ] type 검증
   - [ ] startTime, endTime, lockTime 검증
@@ -159,6 +166,7 @@ Response:
   - [ ] 최소 베팅 시간 검증 (lockTime >= startTime + 60초)
 
 ### Service Layer (`lib/rounds/service.ts`)
+
 - [ ] `createRound()` 메서드 추가
   - [ ] 입력 검증
   - [ ] roundNumber 계산 (마지막 + 1)
@@ -166,11 +174,13 @@ Response:
   - [ ] Repository 호출
 
 ### Repository Layer (`lib/rounds/repository.ts`)
+
 - [ ] `getLastRoundNumber()` 메서드 추가 (type별)
 - [ ] `findOverlappingRounds()` 메서드 추가
 - [ ] `insert()` 메서드 추가
 
 ### Types Layer (`lib/rounds/types.ts`)
+
 - [ ] `CreateRoundInput` 타입 추가
 - [ ] `CreateRoundResult` 타입 추가
 
@@ -198,6 +208,7 @@ export type ValidatedCreateRound = z.infer<typeof createRoundSchema>;
 ```
 
 **변경 사항**:
+
 - ❌ `endTime`, `lockTime` 필드 제거
 - ❌ `.refine()` 검증 로직 제거 (자동 계산으로 불필요)
 - ✅ 훨씬 간단한 스키마!
@@ -476,6 +487,7 @@ export interface CreateRoundResult {
 ### 성공 케이스
 
 **1. 정상적인 6HOUR 라운드 생성**
+
 ```bash
 POST /api/rounds
 {
@@ -494,6 +506,7 @@ POST /api/rounds
 ```
 
 **2. 두 번째 라운드 생성 (roundNumber 자동 증가)**
+
 ```bash
 POST /api/rounds
 {
@@ -510,6 +523,7 @@ POST /api/rounds
 ### 실패 케이스
 
 **1. 잘못된 type**
+
 ```bash
 POST /api/rounds
 {
@@ -528,6 +542,7 @@ POST /api/rounds
 ```
 
 **2. 잘못된 startTime**
+
 ```bash
 POST /api/rounds
 {
@@ -546,6 +561,7 @@ POST /api/rounds
 ```
 
 **3. 중복 시간대**
+
 ```bash
 # 첫 번째 라운드 생성
 POST /api/rounds
@@ -586,6 +602,7 @@ POST /api/rounds
 **원인**: Race Condition (getLastRoundNumber와 insert 사이)
 
 **해결책**:
+
 ```typescript
 // Option A: DB Unique Constraint (이미 존재)
 // db/schema/rounds.ts에 typeRoundUnique 인덱스 정의됨
@@ -607,6 +624,7 @@ async createRound(rawInput: unknown): Promise<Round> {
 **증상**: 시간 계산이 KST/UTC 혼동으로 오류
 
 **해결책**:
+
 - 모든 타임스탬프는 **UTC 기준**으로 저장
 - 클라이언트에서 KST로 변환 표시
 - specification.md 참조:
@@ -622,6 +640,7 @@ async createRound(rawInput: unknown): Promise<Round> {
 **증상**: 프론트엔드에서 null 가격으로 인한 에러
 
 **해결책**:
+
 - API Response에서 null을 명시적으로 반환
 - 프론트엔드에서 null 체크 후 "가격 대기 중" 표시
 - status가 'SCHEDULED'이면 가격이 없는 것이 정상
@@ -652,7 +671,7 @@ export async function createNextRound(type: '6HOUR' = '6HOUR') {
   // 1. 다음 라운드 시간 계산
   const now = Date.now();
   const schedules = getRoundSchedules(type); // specification.md 기준
-  const nextSchedule = schedules.find(s => s.startTime > now);
+  const nextSchedule = schedules.find((s) => s.startTime > now);
 
   if (!nextSchedule) {
     console.error('No upcoming schedule found');
@@ -720,6 +739,7 @@ export async function createNextRound(type: '6HOUR' = '6HOUR') {
 ---
 
 **구현 완료 후 확인 사항**:
+
 - [ ] POST /api/rounds 호출 시 라운드 생성됨
 - [ ] roundNumber가 자동 증가함
 - [ ] 중복 시간대 라운드 생성 시 에러 반환

@@ -3,6 +3,7 @@
 ## 📌 현재 상태
 
 로고 파일이 다음 위치에 저장되어 있습니다:
+
 ```
 public/logo.png (898KB)
 ```
@@ -16,15 +17,15 @@ public/logo.png (898KB)
 **파일: `app/layout.tsx`**
 
 ```typescript
-import type { Metadata } from 'next'
+import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'DeltaX - 금과 비트코인 예측 게임',
   description: 'AI 기반 금과 비트코인 가격 예측 게임 플랫폼',
   icons: {
-    icon: '/logo.png',  // ← favicon 설정
+    icon: '/logo.png', // ← favicon 설정
   },
-}
+};
 ```
 
 ---
@@ -172,7 +173,7 @@ import Image from 'next/image'
 ---
 
 **로고가 정상적으로 표시되지 않으면 다음을 확인하세요:**
+
 1. `public/` 폴더 위치 확인
 2. `logo.png` 파일명 정확성
 3. Next.js 개발 서버 재시작
-
