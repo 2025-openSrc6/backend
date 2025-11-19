@@ -10,6 +10,45 @@ const RETRY_CONFIG = {
   backoffMultiplier: 2,
 };
 
+// Rate limit tracking
+class RateLimitTracker {
+  private requestCount = 0;
+  private windowStart = Date.now();
+  private readonly windowMs = 60000; // 1 minute
+  private readonly maxRequests = 1200; // Binance limit
+
+  async checkAndWait(): Promise<void> {
+    const now = Date.now();
+
+    // Reset window if expired
+    if (now - this.windowStart >= this.windowMs) {
+      this.requestCount = 0;
+      this.windowStart = now;
+    }
+
+    // If we're at the limit, wait until window resets
+    if (this.requestCount >= this.maxRequests) {
+      const waitTime = this.windowMs - (now - this.windowStart);
+      console.warn(`Rate limit reached. Waiting ${waitTime}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      this.requestCount = 0;
+      this.windowStart = Date.now();
+    }
+
+    this.requestCount++;
+  }
+
+  getStats() {
+    return {
+      requestCount: this.requestCount,
+      windowStart: this.windowStart,
+      remainingRequests: this.maxRequests - this.requestCount,
+    };
+  }
+}
+
+const rateLimitTracker = new RateLimitTracker();
+
 // Exponential backoff retry utility
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
@@ -102,11 +141,24 @@ export async function fetchKlines(
   interval: string = '1m',
   limit: number = 100,
 ): Promise<BinanceKline[]> {
+  // Check rate limit before making request
+  await rateLimitTracker.checkAndWait();
+
   return retryWithBackoff(async () => {
     const symbol = SYMBOL_MAP[asset];
     const url = `${BINANCE_BASE_URL}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
 
     const response = await fetch(url);
+
+    // Handle rate limit response from server
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
+      console.warn(`Server rate limit hit. Waiting ${waitTime}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      throw new Error(`Binance API error: 429`);
+    }
+
     if (!response.ok) {
       throw new Error(`Binance API error: ${response.status}`);
     }
@@ -129,11 +181,24 @@ export async function fetchKlines(
 }
 
 export async function fetchCurrentPrice(asset: SupportedAsset): Promise<BinanceTicker> {
+  // Check rate limit before making request
+  await rateLimitTracker.checkAndWait();
+
   return retryWithBackoff(async () => {
     const symbol = SYMBOL_MAP[asset];
     const url = `${BINANCE_BASE_URL}/ticker/24hr?symbol=${symbol}`;
 
     const response = await fetch(url);
+
+    // Handle rate limit response from server
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('Retry-After');
+      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
+      console.warn(`Server rate limit hit. Waiting ${waitTime}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      throw new Error(`Binance API error: 429`);
+    }
+
     if (!response.ok) {
       throw new Error(`Binance API error: ${response.status}`);
     }
@@ -166,6 +231,11 @@ export async function fetchMultipleKlines(
 
   await Promise.all(promises);
   return results;
+}
+
+// Export rate limit stats for monitoring
+export function getRateLimitStats() {
+  return rateLimitTracker.getStats();
 }
 
 export { type SupportedAsset, type BinanceKline, type BinanceTicker };
