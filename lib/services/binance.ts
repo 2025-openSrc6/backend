@@ -2,6 +2,50 @@ import { z } from 'zod';
 
 const BINANCE_BASE_URL = 'https://api.binance.com/api/v3';
 
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 10000,
+  backoffMultiplier: 2,
+};
+
+// Exponential backoff retry utility
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retries: number = RETRY_CONFIG.maxRetries,
+  delay: number = RETRY_CONFIG.initialDelayMs,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
+
+    // Check if error is retryable (network errors, 5xx, 429)
+    const isRetryable =
+      error instanceof Error &&
+      (error.message.includes('fetch failed') ||
+        error.message.includes('429') ||
+        error.message.includes('5'));
+
+    if (!isRetryable) {
+      throw error;
+    }
+
+    console.warn(
+      `Retrying after ${delay}ms... (${RETRY_CONFIG.maxRetries - retries + 1}/${RETRY_CONFIG.maxRetries})`,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    const nextDelay = Math.min(delay * RETRY_CONFIG.backoffMultiplier, RETRY_CONFIG.maxDelayMs);
+
+    return retryWithBackoff(fn, retries - 1, nextDelay);
+  }
+}
+
 const SYMBOL_MAP = {
   PAXG: 'PAXGUSDT',
   BTC: 'BTCUSDT',
@@ -58,50 +102,54 @@ export async function fetchKlines(
   interval: string = '1m',
   limit: number = 100,
 ): Promise<BinanceKline[]> {
-  const symbol = SYMBOL_MAP[asset];
-  const url = `${BINANCE_BASE_URL}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  return retryWithBackoff(async () => {
+    const symbol = SYMBOL_MAP[asset];
+    const url = `${BINANCE_BASE_URL}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Binance API error: ${response.status}`);
-  }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Binance API error: ${response.status}`);
+    }
 
-  const data = await response.json();
+    const data = await response.json();
 
-  // Validate response data with Zod
-  const validatedData = BinanceKlineArraySchema.parse(data);
+    // Validate response data with Zod
+    const validatedData = BinanceKlineArraySchema.parse(data);
 
-  return validatedData.map((kline) => ({
-    openTime: kline[0],
-    open: parseFloat(kline[1]),
-    high: parseFloat(kline[2]),
-    low: parseFloat(kline[3]),
-    close: parseFloat(kline[4]),
-    volume: parseFloat(kline[5]),
-    closeTime: kline[6],
-  }));
+    return validatedData.map((kline) => ({
+      openTime: kline[0],
+      open: parseFloat(kline[1]),
+      high: parseFloat(kline[2]),
+      low: parseFloat(kline[3]),
+      close: parseFloat(kline[4]),
+      volume: parseFloat(kline[5]),
+      closeTime: kline[6],
+    }));
+  });
 }
 
 export async function fetchCurrentPrice(asset: SupportedAsset): Promise<BinanceTicker> {
-  const symbol = SYMBOL_MAP[asset];
-  const url = `${BINANCE_BASE_URL}/ticker/24hr?symbol=${symbol}`;
+  return retryWithBackoff(async () => {
+    const symbol = SYMBOL_MAP[asset];
+    const url = `${BINANCE_BASE_URL}/ticker/24hr?symbol=${symbol}`;
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Binance API error: ${response.status}`);
-  }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Binance API error: ${response.status}`);
+    }
 
-  const data = await response.json();
+    const data = await response.json();
 
-  // Validate response data with Zod
-  const validatedData = BinanceTickerSchema.parse(data);
+    // Validate response data with Zod
+    const validatedData = BinanceTickerSchema.parse(data);
 
-  return {
-    symbol: validatedData.symbol,
-    price: validatedData.lastPrice,
-    priceChangePercent: validatedData.priceChangePercent,
-    volume: validatedData.volume,
-  };
+    return {
+      symbol: validatedData.symbol,
+      price: validatedData.lastPrice,
+      priceChangePercent: validatedData.priceChangePercent,
+      volume: validatedData.volume,
+    };
+  });
 }
 
 export async function fetchMultipleKlines(
