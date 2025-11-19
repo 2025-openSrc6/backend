@@ -1,4 +1,4 @@
-import { getDbFromContext } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { chartData, volatilitySnapshots } from '@/db/schema';
 import { fetchKlines, type SupportedAsset } from '@/lib/services/binance';
 import {
@@ -15,15 +15,14 @@ import {
 } from '@/lib/services/volatility';
 import { NextRequest, NextResponse } from 'next/server';
 import { eq, and, desc } from 'drizzle-orm';
-import type { NextContext } from '@/lib/types';
 
 const TARGET_ASSETS: SupportedAsset[] = ['PAXG', 'BTC'];
 const VOLATILITY_LOOKBACK = 20;
 const AVERAGE_VOLATILITY_PERIOD = 100;
 
-export async function POST(request: NextRequest, context: NextContext) {
+export async function POST(request: NextRequest) {
   try {
-    const db = getDbFromContext(context);
+    const db = getDb();
     const results: Record<string, { chartData: string; volatilitySnapshot: string }> = {};
 
     for (const asset of TARGET_ASSETS) {
@@ -154,9 +153,9 @@ export async function POST(request: NextRequest, context: NextContext) {
   }
 }
 
-export async function GET(request: NextRequest, context: NextContext) {
+export async function GET(request: NextRequest) {
   try {
-    const db = getDbFromContext(context);
+    const db = getDb();
 
     const latestData = await Promise.all(
       TARGET_ASSETS.map(async (asset) => {
