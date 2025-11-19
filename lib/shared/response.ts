@@ -142,9 +142,9 @@ export function handleApiError(error: unknown): NextResponse {
   }
 
   // 500 - Unknown Error
-  // 프로덕션에서는 상세 에러 메시지 숨김
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const message = isDevelopment && error instanceof Error ? error.message : 'Internal server error';
+  // 프로덕션에서는 상세 에러 메시지 숨김 (하지만 디버깅을 위해 잠시 노출)
+  const message = error instanceof Error ? error.message : 'Internal server error';
+  const details = error instanceof Error ? error.stack : undefined;
 
-  return createErrorResponse(500, 'INTERNAL_ERROR', message);
+  return createErrorResponse(500, 'INTERNAL_ERROR', message, details);
 }
