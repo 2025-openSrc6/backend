@@ -5,9 +5,9 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { cache } from 'react';
 import type { D1Database } from '@cloudflare/workers-types';
 
-type RemoteDrizzleClient = ReturnType<typeof initializeDb>;
+export type RemoteDrizzleClient = ReturnType<typeof initializeDb>;
 type BetterSqliteModule = typeof import('drizzle-orm/better-sqlite3');
-type LocalDrizzleClient = ReturnType<BetterSqliteModule['drizzle']>;
+export type LocalDrizzleClient = ReturnType<BetterSqliteModule['drizzle']>;
 export type DbClient = RemoteDrizzleClient | LocalDrizzleClient;
 
 interface CloudflareEnv {
