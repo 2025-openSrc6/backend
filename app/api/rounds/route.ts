@@ -1,17 +1,3 @@
-/**
- * GET /api/rounds - 라운드 목록 조회 API (리팩토링 예시)
- *
- * Controller Layer: HTTP 요청/응답만 처리
- * 모든 비즈니스 로직은 RoundService로 위임
- *
- * 의존성: lib/registry.ts에서 조립된 Service 사용
- *
- * 특징:
- * - registry.roundService 사용 (직접 new 하지 않음)
- * - 의존성 조립은 lib/registry.ts에서 일괄 관리
- * - Controller는 HTTP 처리만 집중
- */
-
 import { NextRequest } from 'next/server';
 import { registry } from '@/lib/registry';
 import {
