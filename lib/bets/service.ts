@@ -15,9 +15,15 @@
 import { BetRepository } from './repository';
 import { RoundRepository } from '@/lib/rounds/repository';
 import { createBetSchema, getBetsQuerySchema } from './validation';
-import { NotFoundError, BusinessRuleError } from '@/lib/shared/errors';
-import { generateUUID } from '@/lib/shared/uuid';
-import type { CreateBetResult, GetBetsResult, BetQueryParams, CreateBetInput } from './types';
+import { NotFoundError, BusinessRuleError, ValidationError } from '@/lib/shared/errors';
+import { generateUUID, isValidUUID } from '@/lib/shared/uuid';
+import type {
+  CreateBetResult,
+  GetBetsResult,
+  BetQueryParams,
+  CreateBetInput,
+  BetWithRound,
+} from './types';
 
 export class BetService {
   private betRepository: BetRepository;
@@ -164,6 +170,44 @@ export class BetService {
         pageSize: validated.pageSize,
         total,
         totalPages,
+      },
+    };
+  }
+
+  /**
+   * 특정 베팅 조회 (라운드 정보 포함)
+   *
+   * @param id - 베팅 UUID
+   * @returns 베팅 정보 (with Round)
+   */
+  async getBetById(id: string): Promise<BetWithRound> {
+    // 1. UUID 검증
+    if (!isValidUUID(id)) {
+      throw new ValidationError('Invalid UUID format', { id });
+    }
+
+    // 2. 베팅 조회
+    const bet = await this.betRepository.findById(id);
+    if (!bet) {
+      throw new NotFoundError('Bet', id);
+    }
+
+    // 3. 라운드 조회
+    const round = await this.roundRepository.findById(bet.roundId);
+    // 라운드가 없으면 데이터 무결성 문제이나 일단 에러 처리
+    if (!round) {
+      throw new NotFoundError('Round for bet', bet.roundId);
+    }
+
+    return {
+      ...bet,
+      round: {
+        id: round.id,
+        roundNumber: round.roundNumber,
+        type: round.type,
+        status: round.status,
+        startTime: round.startTime,
+        endTime: round.endTime,
       },
     };
   }
