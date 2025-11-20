@@ -37,3 +37,14 @@ export function generateUUID(): string {
     });
   }
 }
+
+/**
+ * UUID 형식 검증
+ *
+ * @param uuid 검증할 UUID 문자열
+ * @returns 유효한 UUID 형식인지 여부
+ */
+export function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
