@@ -62,7 +62,7 @@ export interface GetBetsResult {
  * 베팅과 라운드 정보를 포함한 상세 정보
  */
 export interface BetWithRound extends Bet {
-  round?: {
+  round: {
     id: string;
     roundNumber: number;
     type: string;
