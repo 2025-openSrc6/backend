@@ -21,7 +21,7 @@ import {
   BusinessRuleError,
   ServiceError,
 } from '@/lib/shared/errors';
-import { generateUUID } from '@/lib/shared/uuid';
+import { generateUUID, isValidUUID } from '@/lib/shared/uuid';
 import type {
   GetRoundsResult,
   RoundStatus,
@@ -107,8 +107,8 @@ export class RoundService {
    * const round = await roundService.getRoundById('uuid-123');
    */
   async getRoundById(id: string): Promise<Round> {
-    // 1. UUID 형식 검증 (간단한 정규식)
-    if (!this.isValidUuid(id)) {
+    // 1. UUID 형식 검증 (공통 유틸리티 사용)
+    if (!isValidUUID(id)) {
       throw new ValidationError('Invalid UUID format', { id });
     }
 
@@ -269,16 +269,6 @@ export class RoundService {
       // 알 수 없는 에러
       throw error;
     }
-  }
-
-  /**
-   * UUID 형식 검증 (간단한 정규식)
-   *
-   * @private
-   */
-  private isValidUuid(uuid: string): boolean {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
   }
 
   /**
