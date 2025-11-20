@@ -104,6 +104,11 @@ export const createRoundSchema = z.object({
   startTime: z.number().int().positive({
     message: 'startTime must be a positive Epoch milliseconds',
   }),
+  status: z
+    .enum(ROUND_STATUSES as [string, ...string[]], {
+      message: `status must be one of: ${ROUND_STATUSES.join(', ')}`,
+    })
+    .optional(),
 });
 
 export type ValidatedCreateRound = z.infer<typeof createRoundSchema>;

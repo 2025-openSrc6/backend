@@ -21,7 +21,7 @@ import {
   BusinessRuleError,
   ServiceError,
 } from '@/lib/shared/errors';
-import { generateUUID } from '@/lib/shared/uuid';
+import { generateUUID, isValidUUID } from '@/lib/shared/uuid';
 import type {
   GetRoundsResult,
   RoundStatus,
@@ -107,8 +107,8 @@ export class RoundService {
    * const round = await roundService.getRoundById('uuid-123');
    */
   async getRoundById(id: string): Promise<Round> {
-    // 1. UUID 형식 검증 (간단한 정규식)
-    if (!this.isValidUuid(id)) {
+    // 1. UUID 형식 검증 (공통 유틸리티 사용)
+    if (!isValidUUID(id)) {
       throw new ValidationError('Invalid UUID format', { id });
     }
 
@@ -203,11 +203,11 @@ export class RoundService {
     const startTime = validated.startTime;
     const type = validated.type as RoundType;
 
-    const roundDurationMs = ROUND_DURATIONS_MS[type];
-    const bettingDurationMs = BETTING_DURATIONS_MS[type];
+    // [개발용 임시] cron job 구현 후 status 제거
+    const status = validated.status as RoundStatus | undefined;
 
-    const endTime = startTime + roundDurationMs;
-    const lockTime = startTime + bettingDurationMs;
+    const endTime = startTime + ROUND_DURATIONS_MS[type];
+    const lockTime = startTime + BETTING_DURATIONS_MS[type];
 
     // 3. 중복 체크 + roundNumber 증가 + 삽입
     // 주의: 트랜잭션 지원 안함
@@ -236,7 +236,7 @@ export class RoundService {
         id: generateUUID(),
         roundNumber,
         type,
-        status: 'SCHEDULED',
+        status: status ?? 'SCHEDULED',
         startTime,
         endTime,
         lockTime,
@@ -269,16 +269,6 @@ export class RoundService {
       // 알 수 없는 에러
       throw error;
     }
-  }
-
-  /**
-   * UUID 형식 검증 (간단한 정규식)
-   *
-   * @private
-   */
-  private isValidUuid(uuid: string): boolean {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
   }
 
   /**

@@ -10,6 +10,8 @@
  * 3. 테스트 지원: Mock으로 교체 가능
  */
 
+import { BetService } from './bets/service';
+import { BetRepository } from './bets/repository';
 import { RoundRepository } from './rounds/repository';
 import { RoundService } from './rounds/service';
 
@@ -27,15 +29,32 @@ class ServiceRegistry {
     return this._roundRepository;
   }
 
-  // Service 인스턴스 (Repository 주입)
+  // Service 인스턴스
   private _roundService?: RoundService;
 
   get roundService(): RoundService {
     if (!this._roundService) {
-      // ✅ 의존성 조립: Repository를 Service에 넣어줌
+      // 의존성 조립: Repository를 Service에 넣어줌
       this._roundService = new RoundService(this.roundRepository);
     }
     return this._roundService;
+  }
+
+  private _betRepository?: BetRepository;
+  get betRepository(): BetRepository {
+    if (!this._betRepository) {
+      this._betRepository = new BetRepository();
+    }
+    return this._betRepository;
+  }
+
+  private _betService?: BetService;
+  get betService(): BetService {
+    if (!this._betService) {
+      // 의존성 조립: BetService는 BetRepository와 RoundRepository가 모두 필요함 (검증용)
+      this._betService = new BetService(this.betRepository, this.roundRepository);
+    }
+    return this._betService;
   }
 
   // 테스트용: Mock으로 교체
@@ -48,14 +67,22 @@ class ServiceRegistry {
     this._roundService = service;
   }
 
+  setBetRepository(repository: BetRepository): void {
+    this._betRepository = repository;
+    this._betService = undefined;
+  }
+
+  setBetService(service: BetService): void {
+    this._betService = service;
+  }
+
   // 테스트용: 초기화
   reset(): void {
     this._roundRepository = undefined;
     this._roundService = undefined;
+    this._betRepository = undefined;
+    this._betService = undefined;
   }
-
-  // 향후 확장: Bets, Users 등
-  // get betService(): BetService { return new BetService(this.betRepository); }
 }
 
 /**
