@@ -408,6 +408,200 @@ Vitest는 Node 18+에 최적화되어 있으므로, CI 런타임 버전이 Next 
 
 ---
 
+## 흔한 실수와 해결법
+
+### 문제 1: registry Mock이 다른 테스트에 영향을 줌
+
+**증상**: 한 테스트에서 설정한 Mock이 다른 테스트에서도 사용됨
+
+**원인**: 테스트 격리 부족
+
+```typescript
+// ❌ 나쁜 예
+describe('Test Suite', () => {
+  const mockService = { ... };
+  registry.setRoundService(mockService as any);
+
+  it('test 1', () => { ... });
+  it('test 2', () => { ... }); // test 1의 Mock이 그대로 사용됨
+});
+
+// ✅ 좋은 예
+describe('Test Suite', () => {
+  beforeEach(() => {
+    const mockService = { ... };
+    registry.setRoundService(mockService as unknown as typeof registry.roundService);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // registry.reset(); // registry에 reset 메서드가 있다면
+  });
+
+  it('test 1', () => { ... });
+  it('test 2', () => { ... }); // 독립적으로 실행
+});
+```
+
+### 문제 2: 비동기 타이밍 이슈
+
+**증상**: 간헐적으로 테스트가 실패함
+
+**원인**: `await` 누락
+
+```typescript
+// ❌ 나쁜 예
+it('should throw error', () => {
+  expect(asyncFunction()).rejects.toThrow(); // await 없음!
+});
+
+// ✅ 좋은 예
+it('should throw error', async () => {
+  await expect(asyncFunction()).rejects.toThrow();
+});
+```
+
+### 문제 3: Mock 데이터 타입 에러
+
+**증상**: `Type 'X' is missing the following properties from type 'Y'...`
+
+**원인**: Mock 데이터가 실제 타입의 모든 필드를 포함하지 않음
+
+```typescript
+// ❌ 나쁜 예
+const mockRound = {
+  id: 'xxx',
+  status: 'SCHEDULED',
+  // totalBetsCount, platformFeeRate 등 누락!
+};
+
+// ✅ 좋은 예
+const mockRound: Round = {
+  // DB 스키마의 모든 필드 포함
+  id: 'xxx',
+  status: 'SCHEDULED',
+  totalBetsCount: 0,
+  platformFeeRate: '0.05',
+  // ... 모든 필드
+};
+```
+
+### 문제 4: 날짜/시간 테스트의 불안정성
+
+**증상**: `Date.now()` 사용으로 인한 간헐적 실패
+
+**해결**: Fake Timers 사용
+
+```typescript
+// ❌ 나쁜 예
+it('should calculate time', () => {
+  const now = Date.now();
+  const result = calculateDeadline(now);
+  // 실행 시점에 따라 결과가 달라질 수 있음
+});
+
+// ✅ 좋은 예
+it('should calculate time', () => {
+  const fixedDate = new Date('2025-01-01T00:00:00Z');
+  vi.useFakeTimers();
+  vi.setSystemTime(fixedDate);
+
+  const result = calculateDeadline(Date.now());
+  expect(result).toBe(fixedDate.getTime() + 60000);
+
+  vi.useRealTimers();
+});
+```
+
+### 문제 5: 테스트가 너무 느림
+
+**증상**: 테스트 실행에 수 초 이상 소요
+
+**원인**: 불필요한 DB 접근 또는 Mock 미사용
+
+```typescript
+// ❌ 나쁜 예: Service 테스트에서 실제 DB 사용
+it('should create round', async () => {
+  const db = getDb(); // 실제 DB!
+  const result = await service.createRound({ ... });
+  // 느림
+});
+
+// ✅ 좋은 예: Repository를 Mock으로 대체
+it('should create round', async () => {
+  const mockRepo = {
+    insert: vi.fn().mockResolvedValue(mockRound),
+  };
+  const service = new RoundService(mockRepo);
+  const result = await service.createRound({ ... });
+  // 빠름
+});
+```
+
+### 문제 6: "Cannot find module" 에러
+
+**증상**: `Error: Cannot find module '@/lib/...'`
+
+**원인**: vitest.config.ts의 alias 설정 누락
+
+```typescript
+// vitest.config.ts
+import { resolve } from 'path';
+
+export default defineConfig({
+  // ...
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './'), // ✅ alias 설정 필요
+    },
+  },
+});
+```
+
+### 문제 7: Mock 함수가 호출되지 않음
+
+**증상**: `expect(mockFn).toHaveBeenCalled()` 실패
+
+**원인**: Mock을 주입한 위치가 잘못되었거나, 다른 인스턴스 사용
+
+```typescript
+// ❌ 나쁜 예
+const mockService = { getRoundById: vi.fn() };
+// registry에 주입 안 함!
+
+await transitionRoundStatus('id', 'BETTING_OPEN');
+expect(mockService.getRoundById).toHaveBeenCalled(); // 실패
+
+// ✅ 좋은 예
+const mockService = { getRoundById: vi.fn() };
+registry.setRoundService(mockService as any); // ✅ 주입
+
+await transitionRoundStatus('id', 'BETTING_OPEN');
+expect(mockService.getRoundById).toHaveBeenCalled(); // 성공
+```
+
+### 문제 8: 커버리지가 실제보다 낮게 나옴
+
+**증상**: 분명히 테스트했는데 커버리지가 0%
+
+**원인**: `vitest.config.ts`의 include/exclude 설정 문제
+
+```typescript
+// vitest.config.ts
+coverage: {
+  include: [
+    'app/api/bets/**/*.ts',  // ✅ 테스트할 파일 명시
+    'lib/rounds/**/*.ts',
+  ],
+  exclude: [
+    '**/*.test.ts',          // ✅ 테스트 파일 제외
+    '**/types.ts',
+  ],
+}
+```
+
+---
+
 ## FAQ & 성장 노트
 
 **Q1. 왜 Vitest인가요?**
