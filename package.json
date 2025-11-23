@@ -17,9 +17,12 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare preview",
     "cf:preview:remote": "opennextjs-cloudflare preview --remote",
-    "test": "node --test",
     "format": "prettier --write . --ignore-path .prettierignore.ci",
-    "format:check": "prettier --check . --ignore-path .prettierignore.ci"
+    "format:check": "prettier --check . --ignore-path .prettierignore.ci",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@mysten/dapp-kit": "^0.19.8",
@@ -82,11 +85,15 @@
     "@types/pg": "^8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.0.13",
+    "@vitest/ui": "^4.0.13",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5",
+    "vitest": "^4.0.13",
     "wrangler": "^4.46.0"
   }
 }
