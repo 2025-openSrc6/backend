@@ -90,3 +90,88 @@ export interface GetRoundsResult {
     totalPages: number;
   };
 }
+
+// FSM
+
+/**
+ * SCHEDULED → BETTING_OPEN 전이 시 필요한 데이터
+ */
+export interface OpenRoundMetadata {
+  goldStartPrice: string; // 필수
+  btcStartPrice: string; // 필수
+  priceSnapshotStartAt: number; // Epoch milliseconds, 필수
+  startPriceSource: string; // 'kitco' | 'coingecko' | 'average'
+  startPriceIsFallback?: boolean; // 기본값: false
+  startPriceFallbackReason?: string; // fallback인 경우 사유
+  suiPoolAddress: string; // Sui BettingPool Object ID, 필수
+  bettingOpenedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * BETTING_OPEN → BETTING_LOCKED 전이 시 필요한 데이터
+ */
+export interface LockRoundMetadata {
+  bettingLockedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * BETTING_LOCKED → PRICE_PENDING 전이 시 필요한 데이터
+ */
+export interface EndRoundMetadata {
+  roundEndedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * PRICE_PENDING → CALCULATING 전이 시 필요한 데이터
+ */
+export interface CalculateRoundMetadata {
+  goldEndPrice: string; // 필수
+  btcEndPrice: string; // 필수
+  priceSnapshotEndAt: number; // Epoch milliseconds, 필수
+  endPriceSource: string; // 'kitco' | 'coingecko' | 'average'
+  endPriceIsFallback?: boolean; // 기본값: false
+  endPriceFallbackReason?: string; // fallback인 경우 사유
+  goldChangePercent: string; // 변동률, 필수
+  btcChangePercent: string; // 변동률, 필수
+  winner: 'GOLD' | 'BTC' | 'DRAW'; // 필수
+}
+
+/**
+ * CALCULATING → SETTLED 전이 시 필요한 데이터
+ */
+export interface SettleRoundMetadata {
+  platformFeeCollected: number; // 실제 징수 금액, 필수
+  suiSettlementObjectId: string; // Sui Settlement Object ID, 필수
+  settlementCompletedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * CALCULATING → VOIDED 전이 시 필요한 데이터
+ */
+export interface VoidRoundMetadata {
+  settlementCompletedAt: number; // Epoch milliseconds, 필수
+  // winner는 이미 'DRAW'로 설정되어 있어야 함
+}
+
+/**
+ * ANY → CANCELLED 전이 시 필요한 데이터
+ */
+// export interface CancelRoundMetadata {
+//   // 현재 스키마에는 취소 사유 필드가 없음
+//   // Week 2+에서 추가 예정
+//   // cancellationReason?: string;
+//   // cancelledBy?: string;
+//   // cancelledAt: number;
+// }
+
+/**
+ * 모든 전이에서 사용 가능한 metadata 타입
+ */
+export type TransitionMetadata =
+  | OpenRoundMetadata
+  | LockRoundMetadata
+  | EndRoundMetadata
+  | CalculateRoundMetadata
+  | SettleRoundMetadata
+  | VoidRoundMetadata;
+// | CancelRoundMetadata;
