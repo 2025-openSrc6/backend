@@ -116,15 +116,31 @@ async openRound(roundId: string) {
 // 1. ✅ 상수 정의 (이미 완료)
 export const ALLOWED_TRANSITIONS: Record<RoundStatus, RoundStatus[]>;
 
-// 2. ✅ 전이 가능 여부 검증 (구현 필요)
+// 2. ✅ 전이 가능 여부 검증 (완료)
 export function canTransition(from: RoundStatus, to: RoundStatus): boolean;
 
-// 3. ✅ 상태 전이 실행 (구현 필요)
+// 3. ⚠️ 상태 전이 실행 (구체화 필요)
 export async function transitionRoundStatus(
   roundId: string,
   newStatus: RoundStatus,
   metadata?: Record<string, unknown>,
 ): Promise<Round>;
+```
+
+### 지원 레이어 구현 (Week 1)
+
+```typescript
+// lib/rounds/service.ts
+export class RoundService {
+  // ⚠️ 구현 필요
+  async updateRoundById(roundId: string, updateData: Partial<Round>): Promise<Round>;
+}
+
+// lib/rounds/repository.ts
+export class RoundRepository {
+  // ⚠️ 구현 필요
+  async updateById(id: string, updateData: Partial<Round>): Promise<Round>;
+}
 ```
 
 ### 선택적 구현 (Week 2+)
@@ -142,6 +158,111 @@ async function logTransition(
 // 5. ⚠️ 전이 이력 조회 (선택)
 export async function getTransitionHistory(roundId: string): Promise<RoundTransition[]>;
 ```
+
+---
+
+## 상태 전이별 Metadata 타입 정의
+
+각 상태 전이마다 업데이트해야 하는 필드가 다릅니다. 명확한 타입 정의가 필요합니다.
+
+```typescript
+// lib/rounds/types.ts (추가 필요)
+
+/**
+ * SCHEDULED → BETTING_OPEN 전이 시 필요한 데이터
+ */
+export interface OpenRoundMetadata {
+  goldStartPrice: string; // 필수
+  btcStartPrice: string; // 필수
+  priceSnapshotStartAt: number; // Epoch milliseconds, 필수
+  startPriceSource: string; // 'kitco' | 'coingecko' | 'average'
+  startPriceIsFallback?: boolean; // 기본값: false
+  startPriceFallbackReason?: string; // fallback인 경우 사유
+  suiPoolAddress: string; // Sui BettingPool Object ID, 필수
+  bettingOpenedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * BETTING_OPEN → BETTING_LOCKED 전이 시 필요한 데이터
+ */
+export interface LockRoundMetadata {
+  bettingLockedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * BETTING_LOCKED → PRICE_PENDING 전이 시 필요한 데이터
+ */
+export interface EndRoundMetadata {
+  roundEndedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * PRICE_PENDING → CALCULATING 전이 시 필요한 데이터
+ */
+export interface CalculateRoundMetadata {
+  goldEndPrice: string; // 필수
+  btcEndPrice: string; // 필수
+  priceSnapshotEndAt: number; // Epoch milliseconds, 필수
+  endPriceSource: string; // 'kitco' | 'coingecko' | 'average'
+  endPriceIsFallback?: boolean; // 기본값: false
+  endPriceFallbackReason?: string; // fallback인 경우 사유
+  goldChangePercent: string; // 변동률, 필수
+  btcChangePercent: string; // 변동률, 필수
+  winner: 'GOLD' | 'BTC' | 'DRAW'; // 필수
+}
+
+/**
+ * CALCULATING → SETTLED 전이 시 필요한 데이터
+ */
+export interface SettleRoundMetadata {
+  platformFeeCollected: number; // 실제 징수 금액, 필수
+  suiSettlementObjectId: string; // Sui Settlement Object ID, 필수
+  settlementCompletedAt: number; // Epoch milliseconds, 필수
+}
+
+/**
+ * CALCULATING → VOIDED 전이 시 필요한 데이터
+ */
+export interface VoidRoundMetadata {
+  settlementCompletedAt: number; // Epoch milliseconds, 필수
+  // winner는 이미 'DRAW'로 설정되어 있어야 함
+}
+
+/**
+ * ANY → CANCELLED 전이 시 필요한 데이터
+ */
+export interface CancelRoundMetadata {
+  // 현재 스키마에는 취소 사유 필드가 없음
+  // Week 2+에서 추가 예정
+  // cancellationReason?: string;
+  // cancelledBy?: string;
+  // cancelledAt: number;
+}
+
+/**
+ * 모든 전이에서 사용 가능한 metadata 타입
+ */
+export type TransitionMetadata =
+  | OpenRoundMetadata
+  | LockRoundMetadata
+  | EndRoundMetadata
+  | CalculateRoundMetadata
+  | SettleRoundMetadata
+  | VoidRoundMetadata
+  | CancelRoundMetadata;
+```
+
+### 각 전이별 필수 필드 요약
+
+| 전이                            | 필수 필드                                                                                                             |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| SCHEDULED → BETTING_OPEN        | goldStartPrice, btcStartPrice, priceSnapshotStartAt, startPriceSource, suiPoolAddress, bettingOpenedAt               |
+| BETTING_OPEN → BETTING_LOCKED   | bettingLockedAt                                                                                                       |
+| BETTING_LOCKED → PRICE_PENDING  | roundEndedAt                                                                                                          |
+| PRICE_PENDING → CALCULATING     | goldEndPrice, btcEndPrice, priceSnapshotEndAt, endPriceSource, goldChangePercent, btcChangePercent, winner           |
+| CALCULATING → SETTLED           | platformFeeCollected, suiSettlementObjectId, settlementCompletedAt                                                    |
+| CALCULATING → VOIDED            | settlementCompletedAt (winner는 이미 'DRAW')                                                                          |
+| ANY → CANCELLED                 | (없음, Week 2+에서 추가)                                                                                              |
 
 ---
 
@@ -171,27 +292,60 @@ RoundService (lib/rounds/service.ts)
 Database (D1)
 ```
 
-### Repository 사용 여부
+### Repository 구현 필요
+
+FSM은 Service를 통해 Repository를 사용합니다. 현재 **Repository에 updateById 메서드가 없으므로 구현이 필요합니다.**
 
 ```typescript
-// ❌ Repository 불필요
-// 이유:
-// 1. FSM은 단일 목적 (상태 전이만)
-// 2. 쿼리가 복잡하지 않음 (UPDATE 1개)
-// 3. RoundService를 통해 DB 접근
+// lib/rounds/repository.ts
 
-// ✅ Service 직접 사용
-export async function transitionRoundStatus(...) {
-  // registry.roundService 사용
-  const round = await registry.roundService.getRoundById(roundId);
+export class RoundRepository {
+  /**
+   * 라운드 업데이트 (ID 기준)
+   *
+   * @param id - 라운드 UUID
+   * @param updateData - 업데이트할 데이터 (Partial<Round>)
+   * @returns 업데이트된 라운드
+   *
+   * @throws {Error} 라운드가 존재하지 않을 때
+   */
+  async updateById(id: string, updateData: Partial<Round>): Promise<Round> {
+    const db = getDb();
 
-  // 검증 후
-  await registry.roundService.updateRound(roundId, {
-    status: newStatus,
-    ...metadata,
-  });
+    // 1. 업데이트 실행
+    const result = await db
+      .update(rounds)
+      .set(updateData)
+      .where(eq(rounds.id, id))
+      .returning();
+
+    // 2. 결과 확인
+    if (!result || result.length === 0) {
+      throw new Error(`Round not found: ${id}`);
+    }
+
+    return result[0];
+  }
 }
 ```
+
+### Service 구현 완료 확인
+
+현재 Service에는 `updateRoundById` 메서드가 있습니다:
+
+```typescript
+// lib/rounds/service.ts (현재 구현)
+
+export class RoundService {
+  async updateRoundById(roundId: string, updateData: Partial<Round>): Promise<Round> {
+    return await this.repository.updateById(roundId, updateData);
+  }
+}
+```
+
+**문제점**: Repository의 `updateById`가 없으므로 에러 발생!
+
+**해결책**: Repository에 `updateById` 메서드 추가 필요 (위 코드 참고)
 
 ### 파일 구조
 
@@ -290,25 +444,26 @@ async function transitionRoundsStatus(
 ```typescript
 import { RoundStatus } from './types';
 import { registry } from '@/lib/registry';
-import { AppError } from '@/lib/shared/errors';
+import { ValidationError, BusinessRuleError } from '@/lib/shared/errors';
+import { isValidUUID } from '@/lib/shared/uuid';
 
 /**
  * 라운드 상태 전이 (핵심 함수)
  *
  * 보장 사항:
  * - 허용된 전이만 실행
- * - 트랜잭션으로 원자성 보장
- * - Row Lock으로 동시성 제어
+ * - metadata 필수 필드 검증
  * - updated_at 자동 갱신
+ * - 멱등성 보장
  *
  * @param roundId 라운드 ID
  * @param newStatus 새로운 상태
- * @param metadata 추가 업데이트 데이터 (선택)
+ * @param metadata 추가 업데이트 데이터 (각 전이별로 필수 필드 다름)
  * @returns 업데이트된 라운드
  *
  * @throws {ValidationError} roundId가 유효하지 않을 때
- * @throws {NotFoundError} 라운드를 찾을 수 없을 때
- * @throws {InvalidTransitionError} 전이가 허용되지 않을 때
+ * @throws {NotFoundError} 라운드를 찾을 수 없을 때 (Service에서 발생)
+ * @throws {BusinessRuleError} 전이가 허용되지 않을 때
  */
 export async function transitionRoundStatus(
   roundId: string,
@@ -316,17 +471,17 @@ export async function transitionRoundStatus(
   metadata?: Record<string, unknown>,
 ): Promise<Round> {
   // 1. 입력 검증
-  if (!roundId || typeof roundId !== 'string') {
-    throw new AppError('VALIDATION_ERROR', 'Invalid round ID', { roundId });
+  if (!isValidUUID(roundId)) {
+    throw new ValidationError('Invalid UUID format', { roundId });
   }
 
-  // 2. 현재 라운드 조회
+  // 2. 현재 라운드 조회 (NotFoundError는 Service에서 발생)
   const round = await registry.roundService.getRoundById(roundId);
   const currentStatus = round.status as RoundStatus;
 
   // 3. 전이 가능 여부 검증
   if (!canTransition(currentStatus, newStatus)) {
-    throw new AppError(
+    throw new BusinessRuleError(
       'INVALID_TRANSITION',
       `Cannot transition from ${currentStatus} to ${newStatus}`,
       {
@@ -344,21 +499,108 @@ export async function transitionRoundStatus(
     return round;
   }
 
-  // 5. 상태 업데이트 (RoundService 사용)
-  const updatedRound = await registry.roundService.updateRound(roundId, {
+  // 5. 각 전이별 필수 필드 검증 (선택적 구현)
+  validateTransitionMetadata(currentStatus, newStatus, metadata);
+
+  // 6. 상태 업데이트 (RoundService 사용)
+  const updatedRound = await registry.roundService.updateRoundById(roundId, {
     status: newStatus,
     ...metadata,
     updatedAt: Date.now(),
   });
 
-  // 6. 로깅
+  // 7. 로깅
   console.info(`[FSM] Round ${roundId}: ${currentStatus} → ${newStatus}`);
 
-  // 7. (선택) 전이 이력 기록
+  // 8. (선택) 전이 이력 기록
   // Week 2+에서 구현
   // await logTransition(roundId, currentStatus, newStatus, 'CRON_JOB', metadata);
 
   return updatedRound;
+}
+
+/**
+ * 전이별 필수 필드 검증 (선택적 구현)
+ *
+ * @private
+ */
+function validateTransitionMetadata(
+  from: RoundStatus,
+  to: RoundStatus,
+  metadata?: Record<string, unknown>,
+): void {
+  if (!metadata) {
+    // metadata가 없으면 검증 스킵 (Cron Job에서 필수 필드 제공 책임)
+    return;
+  }
+
+  // 각 전이별 필수 필드 검증
+  const transition = `${from}_${to}`;
+
+  switch (transition) {
+    case 'SCHEDULED_BETTING_OPEN':
+      validateRequired(metadata, [
+        'goldStartPrice',
+        'btcStartPrice',
+        'priceSnapshotStartAt',
+        'startPriceSource',
+        'suiPoolAddress',
+        'bettingOpenedAt',
+      ]);
+      break;
+
+    case 'BETTING_OPEN_BETTING_LOCKED':
+      validateRequired(metadata, ['bettingLockedAt']);
+      break;
+
+    case 'BETTING_LOCKED_PRICE_PENDING':
+      validateRequired(metadata, ['roundEndedAt']);
+      break;
+
+    case 'PRICE_PENDING_CALCULATING':
+      validateRequired(metadata, [
+        'goldEndPrice',
+        'btcEndPrice',
+        'priceSnapshotEndAt',
+        'endPriceSource',
+        'goldChangePercent',
+        'btcChangePercent',
+        'winner',
+      ]);
+      break;
+
+    case 'CALCULATING_SETTLED':
+      validateRequired(metadata, [
+        'platformFeeCollected',
+        'suiSettlementObjectId',
+        'settlementCompletedAt',
+      ]);
+      break;
+
+    case 'CALCULATING_VOIDED':
+      validateRequired(metadata, ['settlementCompletedAt']);
+      break;
+
+    // CANCELLED는 필수 필드 없음
+    default:
+      break;
+  }
+}
+
+/**
+ * 필수 필드 검증 헬퍼
+ *
+ * @private
+ */
+function validateRequired(metadata: Record<string, unknown>, fields: string[]): void {
+  const missing = fields.filter((field) => metadata[field] === undefined || metadata[field] === null);
+
+  if (missing.length > 0) {
+    throw new ValidationError('Missing required metadata fields', {
+      missing,
+      provided: Object.keys(metadata),
+    });
+  }
 }
 ```
 
@@ -367,27 +609,33 @@ export async function transitionRoundStatus(
 1. **검증 순서**:
 
    ```
-   입력 검증 → 라운드 조회 → 전이 가능 여부 → 멱등성 체크 → 업데이트
+   입력 검증 → 라운드 조회 → 전이 가능 여부 → 멱등성 체크 → 필수 필드 검증 → 업데이트
    ```
 
-2. **에러 처리**:
-   - `ValidationError`: roundId 잘못됨
-   - `NotFoundError`: 라운드 없음 (RoundService에서 발생)
-   - `InvalidTransitionError`: 전이 불가능
+2. **에러 처리** (실제 errors.ts 기준):
+   - `ValidationError`: roundId 형식 오류 또는 필수 필드 누락
+   - `NotFoundError`: 라운드 없음 (RoundService.getRoundById에서 발생)
+   - `BusinessRuleError`: 전이 불가능 (INVALID_TRANSITION 코드)
 
 3. **멱등성**:
 
    ```typescript
-   // 같은 상태로 전이 시도 = 무시
+   // 같은 상태로 전이 시도 = 무시 (에러 아님!)
    if (currentStatus === newStatus) {
-     return round; // 에러 아님!
+     console.info(`[FSM] Round ${roundId} already in ${newStatus}, skipping transition`);
+     return round;
    }
    ```
 
 4. **RoundService 의존**:
-   - `getRoundById()`: 조회
-   - `updateRound()`: 업데이트
+   - `getRoundById()`: 조회 (NotFoundError 발생 가능)
+   - `updateRoundById()`: 업데이트 (Repository.updateById 호출)
    - FSM은 DB를 직접 접근하지 않음
+
+5. **필수 필드 검증**:
+   - `validateTransitionMetadata()`: 각 전이별 필수 필드 검증
+   - 누락 시 `ValidationError` 발생
+   - Cron Job에서 올바른 metadata를 제공해야 함
 
 ---
 
@@ -468,31 +716,103 @@ CREATE INDEX idx_round_transitions_round_id ON round_transitions(round_id);
 
 ### Cron Job에서 FSM 사용
 
-**Job 2: Round Opener (예시)**:
+**Job 2: Round Opener (상세 예시)**:
 
 ```typescript
 // app/api/cron/rounds/open/route.ts
 import { transitionRoundStatus } from '@/lib/rounds/fsm';
 import { getPrices } from '@/lib/prices/fetcher';
+import { createSuiBettingPool } from '@/lib/sui/betting-pool';
+import type { OpenRoundMetadata } from '@/lib/rounds/types';
 
 export async function POST(request: NextRequest) {
   try {
     // 1. SCHEDULED 라운드 찾기
-    const scheduledRounds = await registry.roundService.findScheduledRounds();
+    const scheduledRounds = await registry.roundService.getRounds({
+      statuses: ['SCHEDULED'],
+      page: 1,
+      pageSize: 100,
+    });
 
-    for (const round of scheduledRounds) {
-      // 2. Start Price 조회
-      const prices = await getPrices();
+    for (const round of scheduledRounds.rounds) {
+      // 2. 시작 시각 확인 (지금이 시작 시각인지)
+      const now = Date.now();
+      if (now < round.startTime) {
+        continue; // 아직 시작 안 됨
+      }
 
-      // 3. FSM을 통한 상태 전이 ✅
-      await transitionRoundStatus(round.id, 'BETTING_OPEN', {
-        goldStartPrice: prices.gold.toString(),
-        btcStartPrice: prices.btc.toString(),
-        priceSnapshotStartAt: prices.timestamp.toISOString(),
-        bettingOpenedAt: Date.now(),
-      });
+      try {
+        // 3. Start Price 조회
+        const priceResult = await getPrices();
 
-      console.log(`[Job 2] Round ${round.id} opened`);
+        // 4. Sui BettingPool 생성
+        const suiPoolAddress = await createSuiBettingPool(round.id);
+
+        // 5. FSM을 통한 상태 전이 ✅
+        // OpenRoundMetadata 타입에 맞게 데이터 준비
+        const metadata: OpenRoundMetadata = {
+          goldStartPrice: priceResult.gold.price.toString(),
+          btcStartPrice: priceResult.btc.price.toString(),
+          priceSnapshotStartAt: priceResult.timestamp,
+          startPriceSource: priceResult.source, // 'kitco' | 'coingecko' | 'average'
+          startPriceIsFallback: priceResult.isFallback ?? false,
+          startPriceFallbackReason: priceResult.fallbackReason,
+          suiPoolAddress,
+          bettingOpenedAt: Date.now(),
+        };
+
+        await transitionRoundStatus(round.id, 'BETTING_OPEN', metadata);
+
+        console.log(`[Job 2] Round ${round.id} opened successfully`);
+      } catch (error) {
+        console.error(`[Job 2] Failed to open round ${round.id}:`, error);
+        // 개별 라운드 실패해도 계속 진행
+      }
+    }
+
+    return createSuccessResponse({ success: true });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+```
+
+**Job 3: Betting Locker (예시)**:
+
+```typescript
+// app/api/cron/rounds/lock/route.ts
+import { transitionRoundStatus } from '@/lib/rounds/fsm';
+import type { LockRoundMetadata } from '@/lib/rounds/types';
+
+export async function POST(request: NextRequest) {
+  try {
+    // 1. BETTING_OPEN 라운드 찾기
+    const openRounds = await registry.roundService.getRounds({
+      statuses: ['BETTING_OPEN'],
+      page: 1,
+      pageSize: 100,
+    });
+
+    const now = Date.now();
+
+    for (const round of openRounds.rounds) {
+      // 2. 베팅 마감 시각 확인
+      if (now < round.lockTime) {
+        continue; // 아직 마감 안 됨
+      }
+
+      try {
+        // 3. FSM을 통한 상태 전이 ✅
+        const metadata: LockRoundMetadata = {
+          bettingLockedAt: now,
+        };
+
+        await transitionRoundStatus(round.id, 'BETTING_LOCKED', metadata);
+
+        console.log(`[Job 3] Round ${round.id} locked`);
+      } catch (error) {
+        console.error(`[Job 3] Failed to lock round ${round.id}:`, error);
+      }
     }
 
     return createSuccessResponse({ success: true });
@@ -643,26 +963,60 @@ curl http://localhost:3000/api/rounds/:roundId
 
 ## 구현 체크리스트
 
-### Week 1 (필수)
+### Week 1 필수 구현
+
+#### 1. Types 추가 (lib/rounds/types.ts)
 
 ```typescript
-// lib/rounds/fsm.ts
+// ⚠️ 각 전이별 metadata 타입 추가
+export interface OpenRoundMetadata { ... }
+export interface LockRoundMetadata { ... }
+export interface EndRoundMetadata { ... }
+export interface CalculateRoundMetadata { ... }
+export interface SettleRoundMetadata { ... }
+export interface VoidRoundMetadata { ... }
+export interface CancelRoundMetadata { ... }
 
+export type TransitionMetadata =
+  | OpenRoundMetadata
+  | LockRoundMetadata
+  | EndRoundMetadata
+  | CalculateRoundMetadata
+  | SettleRoundMetadata
+  | VoidRoundMetadata
+  | CancelRoundMetadata;
+```
+
+#### 2. Repository 업데이트 (lib/rounds/repository.ts)
+
+```typescript
+// ⚠️ updateById 메서드 추가 (현재 없음!)
+export class RoundRepository {
+  async updateById(id: string, updateData: Partial<Round>): Promise<Round> {
+    // 구현 필요 (위의 "Repository 구현 필요" 섹션 참고)
+  }
+}
+```
+
+#### 3. FSM 완성 (lib/rounds/fsm.ts)
+
+```typescript
 // ✅ 1. 상수 정의 (완료)
 export const ALLOWED_TRANSITIONS: Record<RoundStatus, RoundStatus[]> = { ... };
 
-// ✅ 2. canTransition (구현 필요)
-export function canTransition(from: RoundStatus, to: RoundStatus): boolean {
-  // TODO: 위의 "함수별 구현 가이드" 참고
-}
+// ✅ 2. canTransition (완료)
+export function canTransition(from: RoundStatus, to: RoundStatus): boolean { ... }
 
-// ✅ 3. transitionRoundStatus (구현 필요)
+// ⚠️ 3. transitionRoundStatus (구체화 필요)
+// - 에러 타입 수정: AppError → ValidationError, BusinessRuleError
+// - validateTransitionMetadata 함수 추가
+// - validateRequired 헬퍼 함수 추가
 export async function transitionRoundStatus(
   roundId: string,
   newStatus: RoundStatus,
   metadata?: Record<string, unknown>,
 ): Promise<Round> {
-  // TODO: 위의 "함수별 구현 가이드" 참고
+  // TODO: 위의 "transitionRoundStatus 완성된 구현" 참고
 }
 ```
 
@@ -671,18 +1025,29 @@ export async function transitionRoundStatus(
 ```typescript
 // __tests__/lib/rounds/fsm.test.ts
 
-// ✅ 1. canTransition 테스트
-describe('canTransition', () => {
-  // 정상 전이
-  // 잘못된 전이
-  // 종료 상태
-});
+describe('FSM Tests', () => {
+  // ✅ 1. canTransition 테스트
+  describe('canTransition', () => {
+    it('should allow valid transitions', () => { ... });
+    it('should deny invalid transitions', () => { ... });
+    it('should deny transitions from terminal states', () => { ... });
+  });
 
-// ✅ 2. transitionRoundStatus 테스트
-describe('transitionRoundStatus', () => {
-  // 성공 케이스
-  // 에러 케이스
-  // 멱등성
+  // ⚠️ 2. transitionRoundStatus 테스트
+  describe('transitionRoundStatus', () => {
+    it('should transition successfully with valid metadata', () => { ... });
+    it('should throw ValidationError for invalid UUID', () => { ... });
+    it('should throw NotFoundError for non-existent round', () => { ... });
+    it('should throw BusinessRuleError for invalid transition', () => { ... });
+    it('should throw ValidationError for missing required fields', () => { ... });
+    it('should be idempotent (same state)', () => { ... });
+  });
+
+  // ⚠️ 3. validateTransitionMetadata 테스트 (선택적)
+  describe('validateTransitionMetadata', () => {
+    it('should validate SCHEDULED → BETTING_OPEN metadata', () => { ... });
+    it('should throw ValidationError for missing required fields', () => { ... });
+  });
 });
 ```
 
@@ -821,41 +1186,71 @@ export async function POST(request: NextRequest) {
 
 ## 최종 요약
 
-### FSM의 역할
+### FSM 구현의 핵심 변경 사항
 
 ```
-1. ✅ 상태 전이 검증 (canTransition)
-2. ✅ 안전한 상태 변경 (transitionRoundStatus)
-3. ⚠️ 전이 이력 기록 (logTransition) - Week 2+
+1. ✅ 에러 타입: AppError → ValidationError, BusinessRuleError, NotFoundError
+2. ✅ Repository: updateById 메서드 추가 필요 (현재 없음)
+3. ✅ Types: 각 전이별 metadata 타입 추가 필요
+4. ✅ 필수 필드 검증: validateTransitionMetadata 함수 추가
+5. ✅ Service: updateRoundById는 이미 구현됨 (Repository.updateById 호출)
 ```
 
-### 아키텍처 위치
+### 구현 순서 (우선순위)
 
 ```
-FSM = Service Layer에 가까운 독립 모듈
-- Repository 불필요 (RoundService 사용)
-- 모든 Cron Job에서 공통 사용
-- 비즈니스 로직 중심
+1. ⚠️ Repository.updateById 구현 (20분) - 가장 급함!
+2. ⚠️ types.ts에 metadata 타입 추가 (15분)
+3. ⚠️ fsm.ts의 transitionRoundStatus 구체화 (30분)
+   - 에러 타입 수정
+   - validateTransitionMetadata 함수 추가
+   - validateRequired 헬퍼 함수 추가
+4. ⚠️ 테스트 작성 (30분)
+5. ✅ Cron Job에서 FSM 사용 (Week 1 진행 중)
+```
+
+### 아키텍처 레이어 역할
+
+```
+FSM (lib/rounds/fsm.ts)
+├── 검증: 상태 전이 가능 여부 + 필수 필드
+├── 호출: RoundService.getRoundById, updateRoundById
+└── 에러: ValidationError, BusinessRuleError
+
+RoundService (lib/rounds/service.ts)
+├── 비즈니스 로직: 입력 검증, 계산
+├── 호출: RoundRepository 메서드들
+└── 에러: NotFoundError (라운드 없을 때)
+
+RoundRepository (lib/rounds/repository.ts)
+├── DB 접근: Drizzle ORM 쿼리 생성
+├── updateById: ⚠️ 구현 필요!
+└── 에러: 기본 Error (DB 오류)
 ```
 
 ### Cron Job 구현 전에 FSM 먼저!
 
 ```
 이유:
-1. Cron Job은 FSM에 의존
+1. Cron Job은 FSM에 의존 (모든 상태 전이는 FSM을 통해)
 2. FSM 없으면 상태 전이 검증 불가
-3. 테스트가 훨씬 쉬워짐
+3. 각 전이별 필수 필드가 명확해짐
+4. 테스트가 훨씬 쉬워짐
 ```
 
-### Week 1 우선순위
+### 현재 가장 시급한 작업
 
 ```
-1. ✅ canTransition 구현 (10분)
-2. ✅ transitionRoundStatus 구현 (30분)
-3. ✅ 테스트 작성 (20분)
-4. ✅ Cron Job 2-5에서 사용 (Week 1 진행 중)
+⚠️ Repository.updateById 구현!
+   - 현재 Service에서 호출하는데 메서드가 없음
+   - FSM이 Service를 통해 DB를 업데이트해야 함
+   - 구현 없으면 에러 발생
 ```
 
 ---
 
-**다음 단계**: `lib/rounds/fsm.ts` 완성 후 → Cron Job 구현 시작! 🚀
+**다음 단계**:
+1. `lib/rounds/repository.ts`에 `updateById` 메서드 추가
+2. `lib/rounds/types.ts`에 metadata 타입 추가
+3. `lib/rounds/fsm.ts` 완성
+4. Cron Job 구현 시작! 🚀
