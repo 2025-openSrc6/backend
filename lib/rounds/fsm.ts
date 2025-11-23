@@ -63,6 +63,12 @@ export async function transitionRoundStatus(
   const round = await registry.roundService.getRoundById(roundId);
   const currentStatus = round.status as RoundStatus;
 
+  // 멱등성 체크 (이미 목표 상태면 스킵)
+  if (currentStatus === newStatus) {
+    console.info(`[FSM] Round ${roundId} already in ${newStatus}, skipping transition`);
+    return round;
+  }
+
   // 전이 가능 여부 검증
   if (!canTransition(currentStatus, newStatus)) {
     throw new BusinessRuleError(
@@ -75,12 +81,6 @@ export async function transitionRoundStatus(
         allowedTransitions: ALLOWED_TRANSITIONS[currentStatus],
       },
     );
-  }
-
-  // 멱등성 체크 (이미 목표 상태면 스킵)
-  if (currentStatus === newStatus) {
-    console.info(`[FSM] Round ${roundId} already in ${newStatus}, skipping transition`);
-    return round;
   }
 
   // 각 전이 상태별 필수 필드 검증
