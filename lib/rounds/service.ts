@@ -272,6 +272,18 @@ export class RoundService {
   }
 
   /**
+   * 라운드 상태 업데이트
+   *
+   * @param roundId 라운드 ID
+   * @param status 새로운 상태
+   * @param metadata 추가 업데이트 데이터 (선택)
+   * @returns 업데이트된 라운드
+   */
+  async updateRoundById(roundId: string, updateData: Partial<Round>): Promise<Round> {
+    return await this.repository.updateById(roundId, updateData);
+  }
+
+  /**
    * 초를 MM:SS 형식으로 변환
    * @private
    */

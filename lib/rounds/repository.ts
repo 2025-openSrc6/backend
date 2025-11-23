@@ -17,6 +17,7 @@ import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { Round, RoundInsert, RoundQueryParams, RoundType } from './types';
+import { NotFoundError } from '../shared/errors';
 
 export class RoundRepository {
   /**
@@ -173,6 +174,25 @@ export class RoundRepository {
     const db = getDb();
     const [inserted] = await db.insert(rounds).values(roundData).returning();
     return inserted;
+  }
+
+  /**
+   * 라운드 업데이트 (ID 기준)
+   *
+   * @param id - 라운드 UUID
+   * @param updateData - 업데이트할 데이터 (Partial<Round>)
+   * @returns 업데이트된 라운드
+   *
+   * @throws {NotFoundError} 라운드가 존재하지 않을 때
+   */
+  async updateById(id: string, updateData: Partial<Round>): Promise<Round> {
+    const db = getDb();
+
+    const result = await db.update(rounds).set(updateData).where(eq(rounds.id, id)).returning();
+    if (!result || result.length === 0) {
+      throw new NotFoundError('Round', id);
+    }
+    return result[0];
   }
 
   /**
