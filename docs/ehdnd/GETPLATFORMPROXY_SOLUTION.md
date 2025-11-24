@@ -322,7 +322,7 @@ Next.js Dev Server
   ↓
 lib/db.ts → getLocalDrizzle()
   ↓
-better-sqlite3 (delta.db)
+better-sqlite3 (legacy local SQLite 파일)
 
 # 적용 후 (npm run dev)
 Next.js Dev Server
@@ -554,7 +554,8 @@ function getLocalDrizzle(): LocalDrizzleClient {
   const betterSqliteModule = require('better-sqlite3');
   const Database = ...;
   const { drizzle } = require('drizzle-orm/better-sqlite3');
-  const dbFile = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'delta.db';
+  const dbFile = process.env.DATABASE_URL?.replace(/^file:/, '');
+  if (!dbFile) throw new Error('DATABASE_URL is required for local SQLite (legacy path)');
   const sqlite = new Database(dbFile);
   return drizzle(sqlite, { schema, logger: ... });
 }
