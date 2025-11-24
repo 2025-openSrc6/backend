@@ -1396,6 +1396,16 @@ async incrementRetryCount(roundId: string): Promise<number> {
 
 ---
 
+## 구현 노트 / 결정사항
+
+- 첫 라운드 앵커: 라운드가 없으면 KST 02/08/14/20(UTC+9) 그리드로 올림해 시작 슬롯을 잡는다. 이후에는 마지막 라운드의 `startTime`에서 +6h로만 이어간다.
+- 아이도템포턴시: 동일 `type+startTime` 라운드가 이미 있으면 새로 만들지 않고 기존 라운드를 반환한다. DB에 `type+start_time` 유니크 인덱스를 추가하면 안전성이 더 높아진다(현재는 `type+round_number`만 유니크).
+- 잘못된 슬롯 자동 교정은 하지 않는다. 앵커 불일치나 겹침은 에러/알림으로 처리하고, 수동/관리자 플로우로 정리한다.
+- 크론 인증: 모든 cron 엔드포인트는 `X-Cron-Secret` 헤더와 `CRON_SECRET` 환경 변수를 비교해 검증한다. 값은 환경별로 32바이트 이상 랜덤으로 생성하며 코드에 하드코딩하지 않는다.
+- 라우트 로깅: `[CRON]` prefix 로거로 시작/완료/실패, 소요 시간, roundId/roundNumber 등을 남긴다. 인증 실패도 경고 로그로 남긴다.
+
+---
+
 ## Cloudflare Workers Cron 설정
 
 ### wrangler.toml 전체 설정
