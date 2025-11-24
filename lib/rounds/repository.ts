@@ -195,6 +195,19 @@ export class RoundRepository {
     return result[0];
   }
 
+  /**
+   * 타입/시작시각으로 라운드 조회 (idempotent cron 용도)
+   */
+  async findByStartTime(type: RoundType, startTime: number): Promise<Round | undefined> {
+    const db = getDb();
+    const result = await db
+      .select()
+      .from(rounds)
+      .where(and(eq(rounds.type, type), eq(rounds.startTime, startTime)))
+      .limit(1);
+    return result[0];
+  }
+
   async findLastRound(type: RoundType): Promise<Round | undefined> {
     const db = getDb();
     const result = await db
