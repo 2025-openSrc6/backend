@@ -293,27 +293,30 @@ export class RoundService {
    * @returns 생성된 라운드
    */
   async createNextScheduledRound(): Promise<Round> {
-    const type = '6HOUR';
-    // 근데 lastRound가 cron job의 lastRound여야하는거 아닌가? 임의 생성할 수도 있지 테스트에서
+    const type: RoundType = '6HOUR';
     const lastRound = await this.repository.findLastRound(type);
 
     let roundNumber: number;
     let startTime: number;
 
     if (!lastRound) {
-      console.log('No last round found, creating first round');
-      // 가장 가까운 6시간으로 올림
-      const now = Date.now();
-      const nextHour = Math.ceil(now / (6 * 60 * 60 * 1000)) * (6 * 60 * 60 * 1000);
-      startTime = nextHour;
+      // 첫 라운드: KST 02/08/14/20시에 맞춘 6시간 슬롯으로 올림
+      startTime = this.getNextAnchoredStartTime(Date.now());
       roundNumber = 1;
     } else {
       startTime = lastRound.startTime + ROUND_DURATIONS_MS[type];
       roundNumber = lastRound.roundNumber + 1;
     }
 
+    // 중복 체크
+    const existing = await this.repository.findByStartTime(type, startTime);
+    if (existing) {
+      return existing;
+    }
+
     const endTime = startTime + ROUND_DURATIONS_MS[type];
     const lockTime = startTime + BETTING_DURATIONS_MS[type];
+    const now = Date.now();
 
     const roundData: RoundInsert = {
       id: generateUUID(),
@@ -323,6 +326,8 @@ export class RoundService {
       startTime,
       endTime,
       lockTime,
+      createdAt: now,
+      updatedAt: now,
     };
 
     return await this.repository.insert(roundData);
@@ -336,5 +341,15 @@ export class RoundService {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  /**
+   * KST 02/08/14/20시 슬롯을 기준으로 다음 시작 시각을 계산
+   */
+  private getNextAnchoredStartTime(nowMs: number): number {
+    const intervalMs = ROUND_DURATIONS_MS['6HOUR']; // 6시간
+    const anchorOffsetMs = 5 * 60 * 60 * 1000; // 05:00 UTC == 14:00 KST → hour % 6 === 5
+    const slots = Math.ceil((nowMs - anchorOffsetMs) / intervalMs);
+    return slots * intervalMs + anchorOffsetMs;
   }
 }
