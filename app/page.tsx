@@ -160,24 +160,6 @@ export default function HomePage() {
 
           {/* 우측: 내 계정 / 포인트 / 퀵 액션 */}
           <section className="flex flex-col gap-4">
-            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-lg shadow-black/40">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-200">내 계정 상태</h3>
-                {isConnected && (
-                  <div className="flex items-center gap-1.5 rounded-full bg-slate-900/70 px-2 py-0.5 text-[10px] text-slate-400">
-                    <Zap className="h-3 w-3 text-cyan-400" />
-                    {points.toLocaleString()} PTS
-                  </div>
-                )}
-              </div>
-              <AccountConnectCard
-                isConnected={isConnected}
-                walletAddress={walletAddress}
-                onConnect={handleConnect}
-                onDisconnect={handleDisconnect}
-              />
-            </Card>
-
             <PointsPanel points={points} />
 
             <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-lg shadow-black/40">
@@ -204,18 +186,6 @@ export default function HomePage() {
                   <ArrowRight className="h-3 w-3" />
                 </Button>
               </div>
-            </Card>
-
-            <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/90 p-3 text-[11px] text-slate-400 shadow-xl shadow-black/40">
-              <div className="mb-1 flex items-center gap-2 font-semibold uppercase tracking-wide text-slate-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                랭킹 산정 기준 (요약)
-              </div>
-              <ul className="space-y-1">
-                <li>• users.del 보유량 + achievements(보유 NFT/뱃지 등) 가치 합산.</li>
-                <li>• 타임프레임에 따라 최근 라운드 수익률을 보조 지표로 확장 예정.</li>
-                <li>• API 스펙과 정확한 공식은 별도 문서로 관리합니다.</li>
-              </ul>
             </Card>
 
             <Card className="border border-slate-800/80 rounded-2xl bg-slate-950/80 p-4 shadow-lg shadow-black/40">
