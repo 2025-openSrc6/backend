@@ -112,3 +112,12 @@ export const createRoundSchema = z.object({
 });
 
 export type ValidatedCreateRound = z.infer<typeof createRoundSchema>;
+
+export const createNextScheduledRoundSchema = z.object({
+  type: z.enum(ROUND_TYPES as [string, ...string[]], {
+    message: `type must be one of: ${ROUND_TYPES.join(', ')}`,
+  }),
+  startTime: z.number().int().positive({
+    message: 'startTime must be a positive Epoch milliseconds',
+  }),
+});
