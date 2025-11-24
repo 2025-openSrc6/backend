@@ -14,7 +14,12 @@
  */
 
 import { RoundRepository } from './repository';
-import { createRoundSchema, getCurrentRoundQuerySchema, getRoundsQuerySchema } from './validation';
+import {
+  createNextScheduledRoundSchema,
+  createRoundSchema,
+  getCurrentRoundQuerySchema,
+  getRoundsQuerySchema,
+} from './validation';
 import {
   ValidationError,
   NotFoundError,
@@ -281,6 +286,46 @@ export class RoundService {
    */
   async updateRoundById(roundId: string, updateData: Partial<Round>): Promise<Round> {
     return await this.repository.updateById(roundId, updateData);
+  }
+
+  /**
+   * 다음 라운드 생성
+   * @returns 생성된 라운드
+   */
+  async createNextScheduledRound(): Promise<Round> {
+    const type = '6HOUR';
+    // 근데 lastRound가 cron job의 lastRound여야하는거 아닌가? 임의 생성할 수도 있지 테스트에서
+    const lastRound = await this.repository.findLastRound(type);
+
+    let roundNumber: number;
+    let startTime: number;
+
+    if (!lastRound) {
+      console.log('No last round found, creating first round');
+      // 가장 가까운 6시간으로 올림
+      const now = Date.now();
+      const nextHour = Math.ceil(now / (6 * 60 * 60 * 1000)) * (6 * 60 * 60 * 1000);
+      startTime = nextHour;
+      roundNumber = 1;
+    } else {
+      startTime = lastRound.startTime + ROUND_DURATIONS_MS[type];
+      roundNumber = lastRound.roundNumber + 1;
+    }
+
+    const endTime = startTime + ROUND_DURATIONS_MS[type];
+    const lockTime = startTime + BETTING_DURATIONS_MS[type];
+
+    const roundData: RoundInsert = {
+      id: generateUUID(),
+      roundNumber,
+      type,
+      status: 'SCHEDULED',
+      startTime,
+      endTime,
+      lockTime,
+    };
+
+    return await this.repository.insert(roundData);
   }
 
   /**

@@ -195,6 +195,17 @@ export class RoundRepository {
     return result[0];
   }
 
+  async findLastRound(type: RoundType): Promise<Round | undefined> {
+    const db = getDb();
+    const result = await db
+      .select()
+      .from(rounds)
+      .where(eq(rounds.type, type))
+      .orderBy(desc(rounds.roundNumber))
+      .limit(1);
+    return result[0];
+  }
+
   /**
    * 필터 조건을 Drizzle WHERE 절로 변환
    *
