@@ -32,9 +32,7 @@ export default function HomePage() {
 
   const displayAddress =
     walletAddress.length > 10
-      ? `${walletAddress.substring(0, 6)}...${walletAddress.substring(
-          walletAddress.length - 4,
-        )}`
+      ? `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`
       : walletAddress;
 
   return (
@@ -122,7 +120,6 @@ export default function HomePage() {
 
         {/* 메인 그리드: 좌측 마켓 / 중앙 차트 / 우측 내 정보 */}
         <div className="mt-3 grid flex-1 gap-4 rounded-[24px] bg-slate-950/60 p-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,2fr)_minmax(0,1.3fr)] lg:p-4">
-
           {/* 중앙: 차트 & 라운드 요약 (Basevol 메인 영역 느낌) */}
           <section className="flex flex-col gap-4 lg:col-span-2">
             {/* 상단: 라운드/타임프레임 헤더 */}
