@@ -133,6 +133,7 @@ export const rounds = sqliteTable(
     startTimeIdx: index('idx_rounds_start_time').on(table.startTime),
     roundNumberIdx: index('idx_rounds_round_number').on(table.roundNumber),
     typeRoundUnique: uniqueIndex('idx_rounds_type_round_number').on(table.type, table.roundNumber),
+    typeStartTimeUnique: uniqueIndex('idx_rounds_type_start_time').on(table.type, table.startTime),
   }),
 );
 
