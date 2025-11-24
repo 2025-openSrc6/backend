@@ -4,13 +4,21 @@ import Database from 'better-sqlite3';
 import path from 'node:path';
 
 async function main() {
-  const dbFile = process.env.DATABASE_URL?.replace(/^file:/, '') || 'delta.db';
+  const dbUrl = process.env.DATABASE_URL;
+
+  if (!dbUrl) {
+    throw new Error(
+      '[local-migrate] DATABASE_URL is required (e.g., file:./.wrangler/state/v3/d1/miniflare-D1DatabaseObject/DB.sqlite)',
+    );
+  }
+
+  const dbFile = dbUrl.replace(/^file:/, '');
   const sqlite = new Database(dbFile);
   const db = drizzle(sqlite);
   const migrationsFolder = path.resolve(process.cwd(), 'drizzle');
 
   await migrate(db, { migrationsFolder });
-  console.log(`[local-migrate] Applied migrations to ${dbFile}`);
+  console.log(`[local-migrate] Applied migrations to ${dbUrl}`);
 }
 
 main().catch((err) => {
