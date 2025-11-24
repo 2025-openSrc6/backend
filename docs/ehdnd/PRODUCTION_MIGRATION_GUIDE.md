@@ -237,11 +237,11 @@ cat drizzle/0001_*.sql
 #### Phase 3: 로컬 테스트
 
 ```bash
-# 6. 로컬 DB 삭제 (클린 상태 테스트)
-rm delta.db delta.db-shm delta.db-wal
+# 6. 로컬 D1 상태 초기화 (선택)
+rm -rf .wrangler/state/**/d1/*
 
-# 7. 로컬에 migration 적용
-npm run db:migrate:local
+# 7. 로컬 D1에 migration 적용
+wrangler d1 migrations apply DB --local
 
 # 8. 앱 실행 및 테스트
 npm run dev
