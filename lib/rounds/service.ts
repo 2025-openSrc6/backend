@@ -14,12 +14,7 @@
  */
 
 import { RoundRepository } from './repository';
-import {
-  createNextScheduledRoundSchema,
-  createRoundSchema,
-  getCurrentRoundQuerySchema,
-  getRoundsQuerySchema,
-} from './validation';
+import { createRoundSchema, getCurrentRoundQuerySchema, getRoundsQuerySchema } from './validation';
 import {
   ValidationError,
   NotFoundError,
