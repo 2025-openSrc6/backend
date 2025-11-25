@@ -25,3 +25,16 @@
 - 가격 조회 함수(`getPrices` 또는 동등한 Service) 구현/주입 필요. 실패 시 위 코드에 맞춰 throw 해야 함.
 - `roundService.settleRound`(또는 동등한 Settlement Service) 구현 필요. 멱등성 확보 및 Recovery 재시도 가능하도록 설계.
 - FSM/테스트/코드에서 PRICE_PENDING 제거 반영 필요(전이 검증, 메타데이터 필수 필드 업데이트 포함).
+
+## 이번 작업 요약 (2025-xx-xx)
+
+- FSM 단순화: PRICE_PENDING 제거, BETTING_LOCKED → CALCULATING만 허용. 상수/타입/테스트 갱신.
+- RoundService.finalizeRound: 필수 필드 검증 → 승자/배당 계산 → CALCULATING 전이 → settleRound 호출. 비즈니스/서비스 에러만 던지고 나머지는 INTERNAL_ERROR 래핑.
+- 테스트: FSM 단위 테스트와 RoundService 테스트를 새 흐름에 맞춰 업데이트. CALCULATING 전이 필수 메타 검증과 finalize 성공 케이스 커버.
+- 문서: CRON_JOB_SPECIFICATION 업데이트(PRICE_PENDING 제거, Job5 트리거 방식), 구현 노트 생성/갱신.
+
+## 앞으로 할 일
+
+- Settlement 구현: `roundService.settleRound` (또는 별도 Settlement Service) 완성, CALCULATING → SETTLED 전이 멱등 처리, Job5 라우트는 얇게 유지.
+- 가격 스냅샷 연결: finalize route에서 실제 `getPrices`(또는 주입된 price service) 사용, 테스트에서는 vi.mock으로 가격 주입.
+- 스키마/이전 데이터: rounds.status enum 및 관련 필드에서 PRICE_PENDING 사용이 없도록 검증. DB 초기화 가능 상태이므로 필요 시 스키마/마이그레이션도 정리.
