@@ -31,9 +31,11 @@ import type {
   RoundType,
   PriceData,
   OpenRoundResult,
+  LockRoundResult,
 } from './types';
 import { BETTING_DURATIONS_MS, ROUND_DURATIONS_MS } from './constants';
 import { transitionRoundStatus } from './fsm';
+import { cronLogger } from '@/lib/cron/logger';
 
 export class RoundService {
   private repository: RoundRepository;
@@ -376,16 +378,31 @@ export class RoundService {
    * @returns OpenRoundResult
    */
   async openRound(prices: PriceData): Promise<OpenRoundResult> {
+    cronLogger.info('[Job 2] Starting', { prices });
+
     // 가장 최근 SCHEDULED 라운드 찾기
     const round = await this.findLatestScheduledRound();
     if (!round) {
+      cronLogger.info('[Job 2] No scheduled round found');
       return { status: 'no_round', message: 'No scheduled round found' };
     }
+
+    cronLogger.info('[Job 2] Found round', {
+      roundId: round.id,
+      roundNumber: round.roundNumber,
+      startTime: new Date(round.startTime).toISOString(),
+      lockTime: new Date(round.lockTime).toISOString(),
+    });
 
     const now = Date.now();
 
     // startTime 아직 안 됐으면 스킵
     if (round.startTime > now) {
+      cronLogger.info('[Job 2] Round not ready yet', {
+        roundId: round.id,
+        startTime: new Date(round.startTime).toISOString(),
+        now: new Date(now).toISOString(),
+      });
       return {
         status: 'not_ready',
         round,
@@ -395,11 +412,17 @@ export class RoundService {
 
     // lockTime 이미 지났으면 CANCEL (복구 안함)
     if (now >= round.lockTime) {
+      cronLogger.warn('[Job 2] lockTime passed, cancelling', {
+        roundId: round.id,
+        lockTime: new Date(round.lockTime).toISOString(),
+        now: new Date(now).toISOString(),
+      });
       const cancelledRound = await this.cancelRound(round.id, {
         reason: 'MISSED_OPEN_WINDOW',
         message: 'lockTime 경과로 자동 취소',
         cancelledBy: 'SYSTEM',
       });
+      cronLogger.info('[Job 2] Round cancelled', { roundId: round.id });
       return {
         status: 'cancelled',
         round: cancelledRound,
@@ -408,6 +431,9 @@ export class RoundService {
     }
 
     // 상태 전이 (SCHEDULED → BETTING_OPEN)
+    cronLogger.info('[Job 2] Transitioning to BETTING_OPEN', {
+      roundId: round.id,
+    });
     const openedRound = await transitionRoundStatus(round.id, 'BETTING_OPEN', {
       goldStartPrice: prices.gold.toString(),
       btcStartPrice: prices.btc.toString(),
@@ -416,9 +442,58 @@ export class RoundService {
       bettingOpenedAt: Date.now(),
     });
 
+    cronLogger.info('[Job 2] Success', {
+      roundId: openedRound.id,
+      status: openedRound.status,
+    });
+
     return {
       status: 'opened',
       round: openedRound,
+    };
+  }
+
+  async lockRound(): Promise<LockRoundResult> {
+    cronLogger.info('[Job 3] Starting');
+
+    const round = await this.repository.findLatestByStatus('BETTING_OPEN');
+    if (!round) {
+      cronLogger.info('[Job 3] No open round found');
+      return { status: 'no_round', message: 'No open round found' };
+    }
+
+    cronLogger.info('[Job 3] Found round', {
+      roundId: round.id,
+      roundNumber: round.roundNumber,
+      lockTime: new Date(round.lockTime).toISOString(),
+    });
+
+    // 시간 조건
+    const now = Date.now();
+    if (round.lockTime > now) {
+      cronLogger.info('[Job 3] Round not ready to lock yet', {
+        roundId: round.id,
+        lockTime: new Date(round.lockTime).toISOString(),
+        now: new Date(now).toISOString(),
+      });
+      return { status: 'not_ready', round, message: 'Round not ready to lock yet' };
+    }
+
+    cronLogger.info('[Job 3] Transitioning to BETTING_LOCKED', {
+      roundId: round.id,
+    });
+    const lockedRound = await transitionRoundStatus(round.id, 'BETTING_LOCKED', {
+      bettingLockedAt: Date.now(),
+    });
+
+    cronLogger.info('[Job 3] Success', {
+      roundId: lockedRound.id,
+      status: lockedRound.status,
+    });
+
+    return {
+      status: 'locked',
+      round: lockedRound,
     };
   }
 

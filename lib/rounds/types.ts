@@ -251,3 +251,10 @@ export interface OpenRoundResult {
   round?: Round;
   message?: string;
 }
+
+export type LockRoundStatus = 'locked' | 'no_round' | 'not_ready' | 'cancelled';
+export interface LockRoundResult {
+  status: LockRoundStatus;
+  round?: Round;
+  message?: string;
+}
