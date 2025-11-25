@@ -17,9 +17,12 @@ export default defineConfig({
         'app/api/bets/**/*.ts',
         'app/api/health/**/*.ts',
         'app/api/rounds/**/*.ts',
+        'app/api/cron/**/*.ts',
         // Business Logic
         'lib/bets/**/*.ts',
         'lib/rounds/**/*.ts',
+        'lib/config/**/*.ts',
+        'lib/cron/**/*.ts',
       ],
       exclude: [
         'node_modules',
