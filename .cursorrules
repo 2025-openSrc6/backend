@@ -1,0 +1,29 @@
+# Cursor Rules for DeltaX
+
+## Project Context
+DeltaX는 6시간 주기 라운드 기반 베팅 플랫폼입니다.
+- Framework: Next.js 16 + TypeScript
+- DB: Drizzle ORM + Cloudflare D1
+- Blockchain: Sui Move contracts
+
+## Always Read First
+1. `AGENTS.md` MUST READ FIRST.
+
+## Coding Rules
+- 3-layer architecture: Controller → Service → Repository
+- DI via `lib/registry.ts`, not direct `new`
+- Prettier: 2-space, 100 cols, single quotes, trailing commas
+- Avoid `any`; use strict types
+
+## Domain Knowledge
+- FSM states: scheduled → open → locked → price_pending → calculating → settled/void/cancel
+- Sui-first writes: validate → Sui tx → D1 persist
+- Atomic pool updates; no read-modify-write patterns
+
+## File Locations
+- API routes: `app/api/**/route.ts`
+- Services: `lib/{rounds,bets}/**/*.service.ts`
+- Repos: `lib/{rounds,bets}/**/*.repository.ts`
+- Schema: `db/schema/*.ts`
+- Tests: `__tests__/**/*.test.ts`
+
