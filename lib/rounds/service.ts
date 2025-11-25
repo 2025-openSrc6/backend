@@ -40,7 +40,6 @@ import { BETTING_DURATIONS_MS, ROUND_DURATIONS_MS } from './constants';
 import { transitionRoundStatus } from './fsm';
 import { cronLogger } from '@/lib/cron/logger';
 import { calculatePayout, determineWinner } from './calculator';
-import { createSuccessResponse, handleApiError } from '../shared/response';
 
 export class RoundService {
   private repository: RoundRepository;
@@ -532,14 +531,25 @@ export class RoundService {
         return { status: 'not_ready', round, message: 'Round not ready to finalize yet' };
       }
 
-      // 상태 전이 (BETTING_LOCKED → PRICE_PENDING) (여기서 하는게 맞나 모르겠네)
-      await transitionRoundStatus(round.id, 'PRICE_PENDING', {
-        roundEndedAt: Date.now(),
-      });
+      // 필수 필드 검증 (fail fast)
+      const missingFields: string[] = [];
+      if (!round.goldStartPrice) missingFields.push('goldStartPrice');
+      if (!round.btcStartPrice) missingFields.push('btcStartPrice');
+      if (round.totalPool === null || round.totalPool === undefined)
+        missingFields.push('totalPool');
+      if (round.totalGoldBets === null || round.totalGoldBets === undefined) {
+        missingFields.push('totalGoldBets');
+      }
+      if (round.totalBtcBets === null || round.totalBtcBets === undefined) {
+        missingFields.push('totalBtcBets');
+      }
 
-      cronLogger.info('[Job 4] Transitioned to PRICE_PENDING', {
-        roundId: round.id,
-      });
+      if (missingFields.length > 0) {
+        throw new BusinessRuleError('ROUND_DATA_MISSING', 'Missing required round fields', {
+          roundId: round.id,
+          missing: missingFields,
+        });
+      }
 
       // 승자 판정
       const winnerResult: DetermineWinnerResult = determineWinner({
@@ -570,8 +580,9 @@ export class RoundService {
         payoutResult,
       });
 
-      // 상태 전이 (PRICE_PENDING → CALCULATING)
-      await transitionRoundStatus(round.id, 'CALCULATING', {
+      // 상태 전이 (BETTING_LOCKED → CALCULATING)
+      const calculatingRound = await transitionRoundStatus(round.id, 'CALCULATING', {
+        roundEndedAt: Date.now(),
         goldEndPrice: endPriceData.gold.toString(),
         btcEndPrice: endPriceData.btc.toString(),
         priceSnapshotEndAt: endPriceData.timestamp,
@@ -585,7 +596,8 @@ export class RoundService {
         roundId: round.id,
       });
 
-      // 이제 Job 5 트리거 - 왜 여기서 하지? 이해가 안가네 이래도 되나?
+      // Job 5 트리거 (내부 호출 - 실제 정산 구현 필요)
+      await this.settleRound(calculatingRound.id);
 
       const jobDuration = Date.now() - jobStartTime;
       cronLogger.info('[Job 4] Completed', {
@@ -595,7 +607,7 @@ export class RoundService {
         durationMs: jobDuration,
       });
 
-      return { status: 'finalized', round };
+      return { status: 'finalized', round: calculatingRound };
     } catch (error) {
       const jobDuration = Date.now() - jobStartTime;
       cronLogger.error('[Job 4] Failed', {
@@ -603,13 +615,21 @@ export class RoundService {
         error: error instanceof Error ? error.message : String(error),
       });
 
-      // TODO(ehdnd): 실패 시 알림 및 Recovery에서 재시도
+      if (error instanceof ServiceError || error instanceof BusinessRuleError) {
+        throw error;
+      }
 
-      return {
-        status: 'cancelled',
-        message: error instanceof Error ? error.message : String(error),
-      };
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to finalize round', {
+        cause: error instanceof Error ? error.message : String(error),
+      });
     }
+  }
+
+  async settleRound(roundId: string): Promise<void> {
+    cronLogger.warn('[Job 5] Settlement not implemented yet', { roundId });
+    throw new ServiceError('SETTLEMENT_NOT_IMPLEMENTED', 'Settlement service not implemented', {
+      roundId,
+    });
   }
 
   /**

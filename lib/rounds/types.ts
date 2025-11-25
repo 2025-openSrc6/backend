@@ -21,7 +21,6 @@ export type RoundStatus =
   | 'SCHEDULED' // 생성됨, 시작 대기 중
   | 'BETTING_OPEN' // 베팅 가능
   | 'BETTING_LOCKED' // 베팅 마감, 라운드 진행 중
-  | 'PRICE_PENDING' // 종료 가격 대기 중
   | 'CALCULATING' // 정산 계산 중
   | 'SETTLED' // 정산 완료
   | 'CANCELLED' // 취소됨 (환불)
@@ -115,10 +114,19 @@ export interface LockRoundMetadata {
 }
 
 /**
- * BETTING_LOCKED → PRICE_PENDING 전이 시 필요한 데이터
+ * BETTING_LOCKED → CALCULATING 전이 시 필요한 데이터
  */
-export interface EndRoundMetadata {
+export interface FinalizeRoundMetadata {
   roundEndedAt: number; // Epoch milliseconds, 필수
+  goldEndPrice: string; // 필수
+  btcEndPrice: string; // 필수
+  priceSnapshotEndAt: number; // Epoch milliseconds, 필수
+  endPriceSource: string; // (미정)
+  endPriceIsFallback?: boolean; // 기본값: false
+  endPriceFallbackReason?: string; // fallback인 경우 사유
+  goldChangePercent: string; // 변동률, 필수
+  btcChangePercent: string; // 변동률, 필수
+  winner: RoundWinner; // 필수, DRAW 제거 (동률 시 금 승리)
 }
 
 /**
@@ -170,21 +178,6 @@ export interface CalculatePayoutResult {
 }
 
 /**
- * PRICE_PENDING → CALCULATING 전이 시 필요한 데이터
- */
-export interface CalculateRoundMetadata {
-  goldEndPrice: string; // 필수
-  btcEndPrice: string; // 필수
-  priceSnapshotEndAt: number; // Epoch milliseconds, 필수
-  endPriceSource: string; // 'kitco' | 'coingecko' | 'average'
-  endPriceIsFallback?: boolean; // 기본값: false
-  endPriceFallbackReason?: string; // fallback인 경우 사유
-  goldChangePercent: string; // 변동률, 필수
-  btcChangePercent: string; // 변동률, 필수
-  winner: RoundWinner; // 필수, DRAW 제거 (동률 시 금 승리)
-}
-
-/**
  * CALCULATING → SETTLED 전이 시 필요한 데이터
  */
 export interface SettleRoundMetadata {
@@ -218,8 +211,7 @@ export interface VoidRoundMetadata {
 export type TransitionMetadata =
   | OpenRoundMetadata
   | LockRoundMetadata
-  | EndRoundMetadata
-  | CalculateRoundMetadata
+  | FinalizeRoundMetadata
   | SettleRoundMetadata
   | VoidRoundMetadata;
 // | CancelRoundMetadata;
