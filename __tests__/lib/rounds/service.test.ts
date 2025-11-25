@@ -437,4 +437,122 @@ describe('RoundService', () => {
       expect(result.status).toBe('not_ready');
     });
   });
+
+  describe('finalizeRound', () => {
+    const mockTransition = fsmModule.transitionRoundStatus as Mock;
+    const NOW = Date.now();
+
+    const createLockedRound = (overrides: Partial<Round> = {}): Round =>
+      ({
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        roundNumber: 2,
+        type: '6HOUR',
+        status: 'BETTING_LOCKED',
+        startTime: NOW - 6 * 60 * 60 * 1000,
+        endTime: NOW - 1000,
+        lockTime: NOW - 6 * 60 * 60 * 1000 + 60 * 1000,
+        totalPool: 1000,
+        totalGoldBets: 600,
+        totalBtcBets: 400,
+        totalBetsCount: 10,
+        goldStartPrice: '10',
+        btcStartPrice: '1',
+        goldEndPrice: null,
+        btcEndPrice: null,
+        goldChangePercent: null,
+        btcChangePercent: null,
+        winner: null,
+        priceSnapshotStartAt: NOW - 6 * 60 * 60 * 1000,
+        priceSnapshotEndAt: null,
+        startPriceSource: 'mock',
+        endPriceSource: null,
+        startPriceIsFallback: false,
+        endPriceIsFallback: false,
+        startPriceFallbackReason: null,
+        endPriceFallbackReason: null,
+        suiPoolAddress: null,
+        suiSettlementObjectId: null,
+        platformFeeRate: '0.05',
+        platformFeeCollected: 0,
+        bettingOpenedAt: NOW - 6 * 60 * 60 * 1000,
+        bettingLockedAt: NOW - 6 * 60 * 60 * 1000 + 60 * 1000,
+        roundEndedAt: null,
+        settlementCompletedAt: null,
+        createdAt: NOW - 7 * 60 * 60 * 1000,
+        updatedAt: NOW - 60 * 1000,
+        ...overrides,
+      }) as Round;
+
+    const endPriceData: PriceData = {
+      gold: 12,
+      btc: 2,
+      timestamp: NOW,
+      source: 'mock',
+    };
+
+    let mockRepository: {
+      findLatestByStatus: Mock;
+    };
+    let roundService: RoundService;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(NOW);
+      mockRepository = {
+        findLatestByStatus: vi.fn(),
+      };
+      roundService = new RoundService(mockRepository as unknown as RoundRepository);
+      mockTransition.mockReset();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('locked 라운드가 없으면 no_round를 반환한다', async () => {
+      mockRepository.findLatestByStatus.mockResolvedValue(null);
+
+      const result = await roundService.finalizeRound(endPriceData);
+
+      expect(result.status).toBe('no_round');
+      expect(mockTransition).not.toHaveBeenCalled();
+    });
+
+    it('endTime이 지나지 않았으면 not_ready를 반환한다', async () => {
+      const round = createLockedRound({ endTime: NOW + 60_000 });
+      mockRepository.findLatestByStatus.mockResolvedValue(round);
+
+      const result = await roundService.finalizeRound(endPriceData);
+
+      expect(result.status).toBe('not_ready');
+      expect(result.round).toEqual(round);
+      expect(mockTransition).not.toHaveBeenCalled();
+    });
+
+    it('필수 필드가 없으면 BusinessRuleError를 던진다', async () => {
+      const round = createLockedRound({ goldStartPrice: null });
+      mockRepository.findLatestByStatus.mockResolvedValue(round);
+
+      await expect(roundService.finalizeRound(endPriceData)).rejects.toMatchObject({
+        code: 'ROUND_DATA_MISSING',
+      });
+      expect(mockTransition).not.toHaveBeenCalled();
+    });
+
+    it('성공 시 CALCULATING 전이 후 settleRound를 호출한다', async () => {
+      const round = createLockedRound();
+      mockRepository.findLatestByStatus.mockResolvedValue(round);
+
+      const calculatingRound = { ...round, status: 'CALCULATING' as const };
+      mockTransition.mockResolvedValue(calculatingRound);
+      const settleSpy = vi.spyOn(roundService, 'settleRound').mockResolvedValue();
+
+      const result = await roundService.finalizeRound(endPriceData);
+
+      expect(result.status).toBe('finalized');
+      expect(mockTransition).toHaveBeenCalledTimes(1);
+      expect(mockTransition).toHaveBeenCalledWith(round.id, 'CALCULATING', expect.any(Object));
+      expect(settleSpy).toHaveBeenCalledWith(calculatingRound.id);
+    });
+  });
 });
