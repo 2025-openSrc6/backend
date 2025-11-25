@@ -57,10 +57,13 @@ Cron Job은 라운드의 전체 생명주기를 관리합니다:
 | 5   | Settlement Processor  | 이벤트기반 | (Job 4 완료 후 즉시)       |
 | 6   | Recovery & Monitoring | 매분       | 매 분마다                  |
 
-**참고**: Job 2와 Job 4는 같은 시각에 실행됩니다.
+**참고**: Job 2와 Job 4는 같은 시각에 실행되지만, **Job 4가 먼저 실행**됩니다.
 
-- Job 2: SCHEDULED → BETTING_OPEN (새 라운드 시작)
-- Job 4: BETTING_LOCKED → CALCULATING (이전 라운드 종료)
+- Job 4: BETTING_LOCKED → CALCULATING (이전 라운드 종료) - **먼저 실행**
+- Job 2: SCHEDULED → BETTING_OPEN (새 라운드 시작) - **이후 실행**
+
+> 💡 **의사결정**: 이전 라운드 정산(돈이 걸림)이 새 라운드 시작보다 중요하므로 Job 4 우선 실행.
+> 자세한 내용은 `CRON_DECISIONS.md` 참조.
 
 ---
 
@@ -909,46 +912,39 @@ export async function POST(request: NextRequest) {
 
 ### 승자 판정 로직 (`lib/rounds/calculator.ts`)
 
+> 💡 **의사결정**: DRAW(무승부) 제거됨. 동률 시 금 승리. 자세한 내용은 `CRON_DECISIONS.md` 참조.
+
 ```typescript
 /**
  * 승자 판정
  *
  * 규칙:
  * - 변동률이 더 높은 자산이 승리
- * - 차이가 0.01% 이내면 무승부 (DRAW)
+ * - 동률 시 금(GOLD) 승리 (DRAW 없음)
  */
 export function determineWinner(params: {
   goldStart: number;
   goldEnd: number;
   btcStart: number;
   btcEnd: number;
-}): 'GOLD' | 'BTC' | 'DRAW' {
+}): 'GOLD' | 'BTC' {
   const { goldStart, goldEnd, btcStart, btcEnd } = params;
 
   // 변동률 계산 (%)
   const goldChange = ((goldEnd - goldStart) / goldStart) * 100;
   const btcChange = ((btcEnd - btcStart) / btcStart) * 100;
 
-  // 차이 계산
-  const diff = Math.abs(goldChange - btcChange);
-
-  // 무승부 기준: 0.01% (0.0001)
-  const DRAW_THRESHOLD = 0.01;
-
-  if (diff < DRAW_THRESHOLD) {
-    return 'DRAW';
-  } else if (goldChange > btcChange) {
-    return 'GOLD';
-  } else {
-    return 'BTC';
-  }
+  // 금 변동률 >= 비트 변동률 → 금 승리 (동률 시 금)
+  return goldChange >= btcChange ? 'GOLD' : 'BTC';
 }
 
 /**
  * 배당 계산
+ *
+ * 참고: DRAW 제거됨 - 동률 시 금 승리로 단순화
  */
 export function calculatePayout(params: {
-  winner: 'GOLD' | 'BTC' | 'DRAW';
+  winner: 'GOLD' | 'BTC';
   totalPool: number;
   totalGoldBets: number;
   totalBtcBets: number;
@@ -960,17 +956,6 @@ export function calculatePayout(params: {
   const platformFee = Math.floor(totalPool * platformFeeRate);
   const payoutPool = totalPool - platformFee;
 
-  // 무승부: 수수료 없이 전액 환불
-  if (winner === 'DRAW') {
-    return {
-      platformFee: 0,
-      payoutPool: totalPool,
-      payoutRatio: 1.0, // 1:1 환불
-      goldChangePercent: 0,
-      btcChangePercent: 0,
-    };
-  }
-
   // 승자 풀
   const winningPool = winner === 'GOLD' ? totalGoldBets : totalBtcBets;
 
@@ -981,8 +966,7 @@ export function calculatePayout(params: {
     platformFee,
     payoutPool,
     payoutRatio,
-    goldChangePercent: 0, // TODO: 실제 계산
-    btcChangePercent: 0,
+    winningPool,
   };
 }
 ```
@@ -1059,17 +1043,7 @@ export async function POST(request: NextRequest) {
 
     cronLogger.info(`[Job 5] Found ${winningBets.length} winners, ${losingBets.length} losers`);
 
-    // 4. 무승부 처리
-    if (round.winner === 'DRAW') {
-      await processDrawSettlement(round, allBets);
-      return createSuccessResponse({
-        round: { id: round.id, status: 'VOIDED' },
-        settledBets: allBets.length,
-        payoutsSent: allBets.length,
-      });
-    }
-
-    // 5. 정상 정산
+    // 4. 정상 정산 (DRAW 제거됨 - 항상 승자/패자 존재)
     // 5-1. Sui Settlement Object 생성
     // TODO: Week 2
     // const suiSettlementObjectId = await suiClient.call({
@@ -1161,37 +1135,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * 무승부 정산 (전액 환불)
- */
-async function processDrawSettlement(round: Round, bets: Bet[]) {
-  for (const bet of bets) {
-    const refund = bet.amount; // 원금 그대로
-
-    // Sui Unlock
-    // TODO: Week 2
-    // await suiClient.call({
-    //   target: `${PACKAGE_ID}::betting::unlock_bet`,
-    //   arguments: [bet.suiBetObjectId, bet.userAddress, refund]
-    // });
-
-    // D1 업데이트
-    await registry.betService.updateBetSettlement(bet.id, {
-      settlementStatus: 'COMPLETED',
-      resultStatus: 'REFUNDED',
-      payoutAmount: refund,
-      settledAt: Date.now(),
-    });
-  }
-
-  // 라운드 VOIDED 처리
-  await transitionRoundStatus(round.id, 'VOIDED', {
-    voidReason: 'DRAW',
-    refundCompleted: true,
-    refundCount: bets.length,
-    voidedAt: Date.now(),
-  });
-}
+// 참고: processDrawSettlement 함수 제거됨
+// DRAW가 없으므로 무승부 정산 로직 불필요
+// 자세한 내용은 CRON_DECISIONS.md 참조
 ```
 
 ### 멱등성 보장
@@ -1398,11 +1344,24 @@ async incrementRetryCount(roundId: string): Promise<number> {
 
 ## 구현 노트 / 결정사항
 
+> 💡 자세한 의사결정 기록은 `CRON_DECISIONS.md` 참조
+
+### 기존 결정사항
+
 - 첫 라운드 앵커: 라운드가 없으면 KST 02/08/14/20(UTC+9) 그리드로 올림해 시작 슬롯을 잡는다. 이후에는 마지막 라운드의 `startTime`에서 +6h로만 이어간다.
 - 아이도템포턴시: 동일 `type+startTime` 라운드가 이미 있으면 새로 만들지 않고 기존 라운드를 반환한다. DB에 `type+start_time` 유니크 인덱스를 추가하면 안전성이 더 높아진다(현재는 `type+round_number`만 유니크).
 - 잘못된 슬롯 자동 교정은 하지 않는다. 앵커 불일치나 겹침은 에러/알림으로 처리하고, 수동/관리자 플로우로 정리한다.
 - 크론 인증: 모든 cron 엔드포인트는 `X-Cron-Secret` 헤더와 `CRON_SECRET` 환경 변수를 비교해 검증한다. 값은 환경별로 32바이트 이상 랜덤으로 생성하며 코드에 하드코딩하지 않는다.
 - 라우트 로깅: `[CRON]` prefix 로거로 시작/완료/실패, 소요 시간, roundId/roundNumber 등을 남긴다. 인증 실패도 경고 로그로 남긴다.
+
+### 2025-11-25 추가 결정사항
+
+- **Job 실행 순서**: Job 4 (Finalize) 먼저 실행, Job 2 (Open) 이후 실행. 이전 라운드 정산이 더 중요.
+- **DRAW 제거**: 동률 시 금(GOLD) 승리. 환불 로직 불필요, VOIDED 상태는 시스템 오류 시만 사용.
+- **가격 API 실패 시**: CANCELLED 처리. 현준님 API에서 fallback 구현 요청.
+- **DELAYED 상태**: 도입 안 함. 상태 복잡도 증가 방지.
+- **Sui 필드 (Week 1)**: `suiPoolAddress`, `suiSettlementObjectId` 옵셔널 처리. Week 2에서 필수로 변경.
+- **설정 분리**: `lib/config/cron.ts` 생성. 환경변수 + constant 분리.
 
 ---
 
@@ -1808,10 +1767,10 @@ describe('determineWinner', () => {
       btcEnd: 99000, // +1.02%
     });
 
-    expect(result).toBe('GOLD');
+    expect(result.winner).toBe('GOLD');
   });
 
-  it('should return DRAW when change difference < 0.01%', () => {
+  it('should return GOLD when changes are equal (동률 시 금 승리)', () => {
     const result = determineWinner({
       goldStart: 2650,
       goldEnd: 2652.65, // +0.10%
@@ -1819,12 +1778,24 @@ describe('determineWinner', () => {
       btcEnd: 98098, // +0.10%
     });
 
-    expect(result).toBe('DRAW');
+    // DRAW 제거됨 - 동률 시 금 승리
+    expect(result.winner).toBe('GOLD');
+  });
+
+  it('should return BTC when btc has higher change', () => {
+    const result = determineWinner({
+      goldStart: 2650,
+      goldEnd: 2660, // +0.38%
+      btcStart: 98000,
+      btcEnd: 99000, // +1.02%
+    });
+
+    expect(result.winner).toBe('BTC');
   });
 });
 
 describe('calculatePayout', () => {
-  it('should calculate correct payout ratio', () => {
+  it('should calculate correct payout ratio for GOLD winner', () => {
     const result = calculatePayout({
       winner: 'GOLD',
       totalPool: 1000000,
@@ -1836,21 +1807,25 @@ describe('calculatePayout', () => {
     expect(result.platformFee).toBe(50000); // 5%
     expect(result.payoutPool).toBe(950000);
     expect(result.payoutRatio).toBeCloseTo(1.583, 2); // 950000 / 600000
+    expect(result.winningPool).toBe(600000);
   });
 
-  it('should return 1:1 ratio for DRAW', () => {
+  it('should calculate correct payout ratio for BTC winner', () => {
     const result = calculatePayout({
-      winner: 'DRAW',
+      winner: 'BTC',
       totalPool: 1000000,
       totalGoldBets: 600000,
       totalBtcBets: 400000,
       platformFeeRate: 0.05,
     });
 
-    expect(result.platformFee).toBe(0); // 무승부는 수수료 없음
-    expect(result.payoutPool).toBe(1000000);
-    expect(result.payoutRatio).toBe(1.0);
+    expect(result.platformFee).toBe(50000); // 5%
+    expect(result.payoutPool).toBe(950000);
+    expect(result.payoutRatio).toBeCloseTo(2.375, 2); // 950000 / 400000
+    expect(result.winningPool).toBe(400000);
   });
+
+  // DRAW 테스트 제거됨 - 동률 시 금 승리로 단순화
 });
 ```
 
@@ -1973,14 +1948,16 @@ T+6시간: Job 4 (Finalize) + Job 2 (Open 다음 라운드)
 
 **Week 1 (Mock 버전)**:
 
-- [ ] lib/cron/auth.ts - Cron Secret 검증
-- [ ] lib/cron/logger.ts - Cron 전용 로거
-- [ ] lib/rounds/fsm.ts - 상태 전이 로직
-- [ ] lib/rounds/calculator.ts - 승자 판정, 배당 계산
-- [ ] app/api/cron/rounds/create/route.ts - Job 1
-- [ ] app/api/cron/rounds/open/route.ts - Job 2 (Mock 가격)
+- [x] lib/cron/auth.ts - Cron Secret 검증
+- [x] lib/cron/logger.ts - Cron 전용 로거
+- [x] lib/rounds/fsm.ts - 상태 전이 로직 (Sui 필드 옵셔널 처리 완료)
+- [x] lib/rounds/calculator.ts - 승자 판정, 배당 계산 (DRAW 제거 완료)
+- [x] lib/config/cron.ts - 설정값 분리
+- [x] app/api/cron/scheduled/route.ts - Cron Handler (Job 4→Job 2 순차 실행)
+- [x] app/api/cron/rounds/create/route.ts - Job 1
+- [ ] app/api/cron/rounds/open/route.ts - Job 2 (현준 가격 API 연동 대기)
 - [ ] app/api/cron/rounds/lock/route.ts - Job 3
-- [ ] Postman으로 수동 테스트
+- [ ] curl로 수동 테스트
 
 **Week 2 (Sui 통합)**:
 
@@ -1988,6 +1965,7 @@ T+6시간: Job 4 (Finalize) + Job 2 (Open 다음 라운드)
 - [ ] app/api/cron/rounds/settle/route.ts - Job 5 (Sui 호출)
 - [ ] app/api/cron/recovery/route.ts - Job 6
 - [ ] lib/cron/slack.ts - Slack 알림
+- [ ] FSM 필수 필드 복원 (suiPoolAddress, suiSettlementObjectId)
 
 **Week 3 (배포)**:
 
