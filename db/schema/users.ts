@@ -43,6 +43,15 @@ export const users = sqliteTable(
     /** 연속 출석 일수 */
     attendanceStreak: integer('attendance_streak', { mode: 'number' }).notNull().default(0),
 
+    /** 닉네임 컬러 (Hex code or 'RAINBOW') */
+    nicknameColor: text('nickname_color'),
+
+    /** 부스트 만료 시간 (Epoch milliseconds) */
+    boostUntil: integer('boost_until', { mode: 'number' }),
+
+    /** Green Mushroom 보유량 */
+    greenMushrooms: integer('green_mushrooms', { mode: 'number' }).default(0),
+
     /** 생성 시각 (Epoch milliseconds) */
     createdAt: integer('created_at', { mode: 'number' })
       .notNull()

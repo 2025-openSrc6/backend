@@ -1,0 +1,65 @@
+
+> deltax@0.1.0 dev
+> next dev
+
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.56.1:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1650ms
+🛒 POST /api/nfts/purchase called
+📦 Request body: { userId: 'test-user-id', itemId: 'nft_obsidian' }
+⚠️  Using local SQLite fallback (delta.db)
+🔍 Looking up item: nft_obsidian
+✅ Item found: Obsidian Tier NFT
+🔍 Looking up user: test-user-id
+✅ User found: NewNickName123
+💰 Balance check: 250000 Required: 300000
+ POST /api/nfts/purchase 400 in 1535ms (compile: 1388ms, render: 147ms)
+🛒 POST /api/nfts/purchase called
+📦 Request body: { userId: 'test-user-id', itemId: 'nft_obsidian' }
+⚠️  Using local SQLite fallback (delta.db)
+🔍 Looking up item: nft_obsidian
+✅ Item found: Obsidian Tier NFT
+🔍 Looking up user: test-user-id
+✅ User found: NewNickName123
+💰 Balance check: 10000000 Required: 300000
+🧪 Mock Minting Enabled
+ POST /api/nfts/purchase 200 in 42ms (compile: 7ms, render: 35ms)
+ ⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.56.1:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1102ms
+ ○ Compiling / ...
+ GET / 200 in 7.1s (compile: 6.8s, render: 385ms)
+⚠️  Using local SQLite fallback (delta.db)
+ GET /api/rankings?limit=20 200 in 563ms (compile: 496ms, render: 67ms)
+ GET /shop 200 in 955ms (compile: 777ms, render: 178ms)
+⚠️  Using local SQLite fallback (delta.db)
+ GET /api/nfts/shop 200 in 437ms (compile: 418ms, render: 19ms)
+ ⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.56.1:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 4.6s
+ GET /shop 200 in 2.4s (compile: 2.3s, render: 146ms)
+ ⚠ Found a change in next.config.ts. Restarting the server to apply the changes...
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.56.1:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1151ms
+ GET /shop 200 in 3.2s (compile: 3.0s, render: 167ms)
+⚠️  Using local SQLite fallback (delta.db)
+ GET /api/nfts/shop 200 in 550ms (compile: 494ms, render: 55ms)

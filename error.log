@@ -1,0 +1,17 @@
+
+> deltax@0.1.0 dev
+> next dev
+
+ ⨯ Failed to load next.config.ts, see more info here https://nextjs.org/docs/messages/next-config-error
+Error: Cannot find module '@opennextjs/cloudflare'
+Require stack:
+- C:\2025-openSrc6\backend\next.config.compiled.js
+- C:\2025-openSrc6\backend\node_modules\next\dist\build\next-config-ts\transpile-config.js
+- C:\2025-openSrc6\backend\node_modules\next\dist\server\config.js
+- C:\2025-openSrc6\backend\node_modules\next\dist\server\next.js
+- C:\2025-openSrc6\backend\node_modules\next\dist\server\lib\start-server.js
+    at Object.<anonymous> (C:\2025-openSrc6\backend\next.config.compiled.js:13:21) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+[?25h

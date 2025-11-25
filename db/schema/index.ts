@@ -4,6 +4,7 @@ export * from './bets';
 export * from './priceSnapshots';
 export * from './settlements';
 export * from './pointTransactions';
+export * from './shopItems';
 export * from './achievements';
 export * from './roundTransitions';
 export * from './chartData';

@@ -1,0 +1,23 @@
+# NFT Shop 구현 작업 목록
+
+- [/] 계획 및 설계
+    - [x] `docs/nft_shop.md` 요구사항 검토
+    - [x] 기존 DB 스키마 및 API 라우트 확인
+    - [/] 구현 계획 작성 (DB 테이블 방식으로 수정)
+- [ ] 데이터베이스 구현
+    - [ ] `shop_items` 테이블 스키마 생성
+    - [ ] 마이그레이션 생성 및 로컬 적용
+    - [ ] 초기 상점 아이템 데이터 시드 (Seed)
+- [ ] API 구현
+    - [ ] `GET /api/nfts/shop` 구현 (상점 아이템 목록)
+    - [ ] `POST /api/nfts/purchase` 구현 (아이템 구매)
+    - [ ] `GET /api/nfts/my` 구현 (내 보유 아이템 조회)
+- [ ] NFT 민팅 구현
+    - [ ] Sui Move Contract (`nft.move`) 작성
+    - [ ] Move Contract Testnet 배포
+    - [ ] Pinata IPFS 연동 (`lib/ipfs/pinata.ts`)
+    - [ ] Sui NFT 민팅 헬퍼 (`lib/sui/nft.ts`)
+    - [ ] 구매 API에 민팅 로직 통합
+- [ ] 검증
+    - [ ] Postman/curl로 API 엔드포인트 테스트
+    - [ ] 로컬 SQLite DB 레코드 확인
