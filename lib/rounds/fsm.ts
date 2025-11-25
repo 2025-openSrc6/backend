@@ -6,8 +6,7 @@ import { BusinessRuleError, ValidationError } from '@/lib/shared/errors';
 export const ALLOWED_TRANSITIONS: Record<RoundStatus, RoundStatus[]> = {
   SCHEDULED: ['BETTING_OPEN', 'CANCELLED'],
   BETTING_OPEN: ['BETTING_LOCKED', 'CANCELLED'],
-  BETTING_LOCKED: ['PRICE_PENDING', 'CANCELLED'],
-  PRICE_PENDING: ['CALCULATING', 'CANCELLED'],
+  BETTING_LOCKED: ['CALCULATING', 'CANCELLED'],
   CALCULATING: ['SETTLED', 'VOIDED', 'CANCELLED'],
   SETTLED: [],
   CANCELLED: [],
@@ -140,12 +139,9 @@ function validateTransitionMetadata(
       validateRequired(metadata, ['bettingLockedAt']);
       break;
 
-    case 'BETTING_LOCKED_PRICE_PENDING':
-      validateRequired(metadata, ['roundEndedAt']);
-      break;
-
-    case 'PRICE_PENDING_CALCULATING':
+    case 'BETTING_LOCKED_CALCULATING':
       validateRequired(metadata, [
+        'roundEndedAt',
         'goldEndPrice',
         'btcEndPrice',
         'priceSnapshotEndAt',

@@ -21,7 +21,6 @@ export const ROUND_STATUSES: readonly RoundStatus[] = [
   'SCHEDULED',
   'BETTING_OPEN',
   'BETTING_LOCKED',
-  'PRICE_PENDING',
   'CALCULATING',
   'SETTLED',
   'CANCELLED',
