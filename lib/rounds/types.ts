@@ -258,3 +258,10 @@ export interface LockRoundResult {
   round?: Round;
   message?: string;
 }
+
+export type FinalizeRoundStatus = 'finalized' | 'no_round' | 'not_ready' | 'cancelled';
+export interface FinalizeRoundResult {
+  status: FinalizeRoundStatus;
+  round?: Round;
+  message?: string;
+}

@@ -73,8 +73,8 @@ export function calculatePayout(params: CalculatePayoutParams): CalculatePayoutR
   const winningPool = winner === 'GOLD' ? totalGoldBets : totalBtcBets;
   const losingPool = winner === 'GOLD' ? totalBtcBets : totalGoldBets;
 
-  // 배당 비율 (승자가 없으면 0)
-  const payoutRatio = winningPool > 0 ? payoutPool / winningPool : 0;
+  // 배당 비율
+  const payoutRatio = payoutPool / winningPool;
 
   return {
     platformFee,
