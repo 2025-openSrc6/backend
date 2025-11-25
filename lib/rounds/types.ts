@@ -223,3 +223,31 @@ export type TransitionMetadata =
   | SettleRoundMetadata
   | VoidRoundMetadata;
 // | CancelRoundMetadata;
+
+// ============================================
+// Cron Job Service Types
+// ============================================
+
+/**
+ * 가격 데이터 (외부 API에서 가져온 스냅샷)
+ */
+export interface PriceData {
+  gold: number;
+  btc: number;
+  timestamp: number; // Epoch milliseconds
+  source: string; // 'kitco' | 'coingecko' | 'mock' 등
+}
+
+/**
+ * openRound 결과 상태
+ */
+export type OpenRoundStatus = 'opened' | 'no_round' | 'not_ready' | 'cancelled';
+
+/**
+ * Service.openRound() 반환 타입
+ */
+export interface OpenRoundResult {
+  status: OpenRoundStatus;
+  round?: Round;
+  message?: string;
+}
