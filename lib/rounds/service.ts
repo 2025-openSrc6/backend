@@ -32,10 +32,15 @@ import type {
   PriceData,
   OpenRoundResult,
   LockRoundResult,
+  FinalizeRoundResult,
+  CalculatePayoutResult,
+  DetermineWinnerResult,
 } from './types';
 import { BETTING_DURATIONS_MS, ROUND_DURATIONS_MS } from './constants';
 import { transitionRoundStatus } from './fsm';
 import { cronLogger } from '@/lib/cron/logger';
+import { calculatePayout, determineWinner } from './calculator';
+import { createSuccessResponse, handleApiError } from '../shared/response';
 
 export class RoundService {
   private repository: RoundRepository;
@@ -495,6 +500,116 @@ export class RoundService {
       status: 'locked',
       round: lockedRound,
     };
+  }
+
+  async finalizeRound(endPriceData: PriceData): Promise<FinalizeRoundResult> {
+    const jobStartTime = Date.now();
+    cronLogger.info('[Job 4] Starting', { jobStartTime });
+
+    try {
+      // 가장 최근 BETTING_LOCKED 라운드 1개 찾기
+      const round = await this.repository.findLatestByStatus('BETTING_LOCKED');
+      if (!round) {
+        cronLogger.info('[Job 4] No locked round found');
+        return { status: 'no_round', message: 'No locked round found' };
+      }
+
+      cronLogger.info('[Job 4] Found round', {
+        roundId: round.id,
+        roundNumber: round.roundNumber,
+        endTime: new Date(round.endTime).toISOString(),
+        now: new Date(Date.now()).toISOString(),
+      });
+
+      // 시간 조건
+      const now = Date.now();
+      if (round.endTime > now) {
+        cronLogger.info('[Job 4] Round not ready to finalize yet', {
+          roundId: round.id,
+          endTime: new Date(round.endTime).toISOString(),
+          now: new Date(now).toISOString(),
+        });
+        return { status: 'not_ready', round, message: 'Round not ready to finalize yet' };
+      }
+
+      // 상태 전이 (BETTING_LOCKED → PRICE_PENDING) (여기서 하는게 맞나 모르겠네)
+      await transitionRoundStatus(round.id, 'PRICE_PENDING', {
+        roundEndedAt: Date.now(),
+      });
+
+      cronLogger.info('[Job 4] Transitioned to PRICE_PENDING', {
+        roundId: round.id,
+      });
+
+      // 승자 판정
+      const winnerResult: DetermineWinnerResult = determineWinner({
+        goldStart: parseFloat(round.goldStartPrice!),
+        goldEnd: endPriceData.gold,
+        btcStart: parseFloat(round.btcStartPrice!),
+        btcEnd: endPriceData.btc,
+      });
+
+      cronLogger.info('[Job 4] Winner determined', {
+        roundId: round.id,
+        winner: winnerResult.winner,
+        goldChangePercent: winnerResult.goldChangePercent,
+        btcChangePercent: winnerResult.btcChangePercent,
+      });
+
+      // 배당 계산
+      const payoutResult: CalculatePayoutResult = calculatePayout({
+        winner: winnerResult.winner,
+        totalPool: round.totalPool!,
+        totalGoldBets: round.totalGoldBets!,
+        totalBtcBets: round.totalBtcBets!,
+        platformFeeRate: 0.05,
+      });
+
+      cronLogger.info('[Job 4] Payout calculated', {
+        roundId: round.id,
+        payoutResult,
+      });
+
+      // 상태 전이 (PRICE_PENDING → CALCULATING)
+      await transitionRoundStatus(round.id, 'CALCULATING', {
+        goldEndPrice: endPriceData.gold.toString(),
+        btcEndPrice: endPriceData.btc.toString(),
+        priceSnapshotEndAt: endPriceData.timestamp,
+        endPriceSource: endPriceData.source,
+        winner: winnerResult.winner,
+        goldChangePercent: winnerResult.goldChangePercent.toString(),
+        btcChangePercent: winnerResult.btcChangePercent.toString(),
+      });
+
+      cronLogger.info('[Job 4] Transitioned to CALCULATING', {
+        roundId: round.id,
+      });
+
+      // 이제 Job 5 트리거 - 왜 여기서 하지? 이해가 안가네 이래도 되나?
+
+      const jobDuration = Date.now() - jobStartTime;
+      cronLogger.info('[Job 4] Completed', {
+        roundId: round.id,
+        roundNumber: round.roundNumber,
+        winner: winnerResult.winner,
+        durationMs: jobDuration,
+      });
+
+      return { status: 'finalized', round };
+    } catch (error) {
+      const jobDuration = Date.now() - jobStartTime;
+      cronLogger.error('[Job 4] Failed', {
+        durationMs: jobDuration,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      // TODO(ehdnd): 실패 시 알림 및 Recovery에서 재시도
+
+      return {
+        status: 'cancelled',
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   /**
