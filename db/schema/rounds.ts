@@ -112,7 +112,7 @@ export const rounds = sqliteTable(
     /** BETTING_LOCKED 전환 시각 (Epoch milliseconds) */
     bettingLockedAt: integer('betting_locked_at', { mode: 'number' }),
 
-    /** PRICE_PENDING 진입 시각 (Epoch milliseconds) */
+    /** CALCULATING 진입 시각 (Epoch milliseconds) */
     roundEndedAt: integer('round_ended_at', { mode: 'number' }),
 
     /** 정산 완료 시각 (Epoch milliseconds) */

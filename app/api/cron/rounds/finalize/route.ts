@@ -15,7 +15,7 @@ import { NextRequest } from 'next/server';
  * 2. endTime <= NOW 확인
  * 3. End Price 스냅샷 가져오기
  * 4. 승자 판정 + 배당 계산
- * 5. 상태 전이 (BETTING_LOCKED → PRICE_PENDING → CALCULATING) - FSM 직접 사용
+ * 5. 상태 전이 (BETTING_LOCKED → CALCULATING) - FSM 직접 사용
  * 6. Job 5 트리거
  * 7. 실패 시 → Recovery에서 재시도 (돈이 걸린 Job!)
  */
