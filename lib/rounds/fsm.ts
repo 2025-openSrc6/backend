@@ -124,12 +124,14 @@ function validateTransitionMetadata(
 
   switch (transition) {
     case 'SCHEDULED_BETTING_OPEN':
+      // suiPoolAddress는 Week 2 (Sui 통합) 전까지 옵셔널
+      // Week 2에서 Sui 통합 시 필수로 변경 예정
       validateRequired(metadata, [
         'goldStartPrice',
         'btcStartPrice',
         'priceSnapshotStartAt',
         'startPriceSource',
-        'suiPoolAddress',
+        // 'suiPoolAddress', // TODO: Week 2에서 필수로 변경
         'bettingOpenedAt',
       ]);
       break;
@@ -155,9 +157,10 @@ function validateTransitionMetadata(
       break;
 
     case 'CALCULATING_SETTLED':
+      // suiSettlementObjectId는 Week 2 (Sui 통합) 전까지 옵셔널
       validateRequired(metadata, [
         'platformFeeCollected',
-        'suiSettlementObjectId',
+        // 'suiSettlementObjectId', // TODO: Week 2에서 필수로 변경
         'settlementCompletedAt',
       ]);
       break;
