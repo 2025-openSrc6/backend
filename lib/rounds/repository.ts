@@ -16,7 +16,7 @@ import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import type { Round, RoundInsert, RoundQueryParams, RoundType } from './types';
+import type { Round, RoundInsert, RoundQueryParams, RoundStatus, RoundType } from './types';
 import { NotFoundError } from '../shared/errors';
 
 export class RoundRepository {
@@ -217,6 +217,25 @@ export class RoundRepository {
       .orderBy(desc(rounds.roundNumber))
       .limit(1);
     return result[0];
+  }
+
+  /**
+   * 특정 상태의 가장 최근 라운드 1개 조회
+   *
+   * "가장 최근"의 기준: startTime이 가장 큰 라운드
+   *
+   * @param status - 라운드 상태
+   * @returns 라운드 또는 null
+   */
+  async findLatestByStatus(status: RoundStatus): Promise<Round | null> {
+    const db = getDb();
+    const result = await db
+      .select()
+      .from(rounds)
+      .where(eq(rounds.status, status))
+      .orderBy(desc(rounds.startTime))
+      .limit(1);
+    return result[0] ?? null;
   }
 
   /**

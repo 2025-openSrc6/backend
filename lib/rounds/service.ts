@@ -29,8 +29,11 @@ import type {
   RoundInsert,
   RoundQueryParams,
   RoundType,
+  PriceData,
+  OpenRoundResult,
 } from './types';
 import { BETTING_DURATIONS_MS, ROUND_DURATIONS_MS } from './constants';
+import { transitionRoundStatus } from './fsm';
 
 export class RoundService {
   private repository: RoundRepository;
@@ -326,6 +329,97 @@ export class RoundService {
     };
 
     return await this.repository.insert(roundData);
+  }
+
+  /**
+   * 가장 최근 SCHEDULED 라운드 1개 찾기
+   *
+   * 왜 "모든 SCHEDULED"가 아닌 "가장 최근 1개"인가?
+   * - 정상 상황: 항상 1개만 존재
+   * - 비정상 상황: 이전 라운드가 밀려있으면 CANCEL 대상
+   */
+  async findLatestScheduledRound(): Promise<Round | null> {
+    return await this.repository.findLatestByStatus('SCHEDULED');
+  }
+
+  /**
+   * 라운드 취소 (FSM 래핑)
+   *
+   * 취소는 여러 곳에서 호출되므로 Service에서 래핑
+   */
+  async cancelRound(
+    roundId: string,
+    params: {
+      reason: string;
+      message: string;
+      cancelledBy: 'SYSTEM' | 'ADMIN';
+    },
+  ): Promise<Round> {
+    return transitionRoundStatus(roundId, 'CANCELLED', {
+      cancellationReason: params.reason,
+      cancellationMessage: params.message,
+      cancelledBy: params.cancelledBy,
+      cancelledAt: Date.now(),
+    });
+  }
+
+  /**
+   * 라운드 오픈 (Job 2: Round Opener)
+   *
+   * 책임:
+   * 1. 가장 최근 SCHEDULED 라운드 찾기
+   * 2. 시간 검증 (startTime <= now < lockTime)
+   * 3. 상태 전이 (SCHEDULED → BETTING_OPEN) - FSM 호출
+   * 4. lockTime 경과 시 자동 취소
+   *
+   * @param prices - 외부 API에서 가져온 가격 데이터
+   * @returns OpenRoundResult
+   */
+  async openRound(prices: PriceData): Promise<OpenRoundResult> {
+    // 가장 최근 SCHEDULED 라운드 찾기
+    const round = await this.findLatestScheduledRound();
+    if (!round) {
+      return { status: 'no_round', message: 'No scheduled round found' };
+    }
+
+    const now = Date.now();
+
+    // startTime 아직 안 됐으면 스킵
+    if (round.startTime > now) {
+      return {
+        status: 'not_ready',
+        round,
+        message: 'Round not ready yet (startTime not reached)',
+      };
+    }
+
+    // lockTime 이미 지났으면 CANCEL (복구 안함)
+    if (now >= round.lockTime) {
+      const cancelledRound = await this.cancelRound(round.id, {
+        reason: 'MISSED_OPEN_WINDOW',
+        message: 'lockTime 경과로 자동 취소',
+        cancelledBy: 'SYSTEM',
+      });
+      return {
+        status: 'cancelled',
+        round: cancelledRound,
+        message: 'Round cancelled (missed open window)',
+      };
+    }
+
+    // 상태 전이 (SCHEDULED → BETTING_OPEN)
+    const openedRound = await transitionRoundStatus(round.id, 'BETTING_OPEN', {
+      goldStartPrice: prices.gold.toString(),
+      btcStartPrice: prices.btc.toString(),
+      priceSnapshotStartAt: prices.timestamp,
+      startPriceSource: prices.source,
+      bettingOpenedAt: Date.now(),
+    });
+
+    return {
+      status: 'opened',
+      round: openedRound,
+    };
   }
 
   /**
