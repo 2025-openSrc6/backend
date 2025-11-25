@@ -103,7 +103,7 @@ export interface OpenRoundMetadata {
   startPriceSource: string; // 'kitco' | 'coingecko' | 'average'
   startPriceIsFallback?: boolean; // 기본값: false
   startPriceFallbackReason?: string; // fallback인 경우 사유
-  suiPoolAddress: string; // Sui BettingPool Object ID, 필수
+  suiPoolAddress?: string; // Sui BettingPool Object ID, Week 2까지 옵셔널
   bettingOpenedAt: number; // Epoch milliseconds, 필수
 }
 
@@ -122,6 +122,54 @@ export interface EndRoundMetadata {
 }
 
 /**
+ * 승자 타입 (DRAW 제거됨 - 동률 시 금 승리)
+ */
+export type RoundWinner = 'GOLD' | 'BTC';
+
+// Calculator Types
+
+/**
+ * 승자 판정 입력 파라미터
+ */
+export interface DetermineWinnerParams {
+  goldStart: number; // 금 시작 가격 (USD/oz)
+  goldEnd: number; // 금 종료 가격 (USD/oz)
+  btcStart: number; // BTC 시작 가격 (USD)
+  btcEnd: number; // BTC 종료 가격 (USD)
+}
+
+/**
+ * 승자 판정 결과
+ */
+export interface DetermineWinnerResult {
+  winner: RoundWinner;
+  goldChangePercent: number;
+  btcChangePercent: number;
+}
+
+/**
+ * 배당 계산 입력 파라미터
+ */
+export interface CalculatePayoutParams {
+  winner: RoundWinner;
+  totalPool: number; // 총 베팅 풀
+  totalGoldBets: number; // 금 베팅 총액
+  totalBtcBets: number; // BTC 베팅 총액
+  platformFeeRate: number; // 플랫폼 수수료율 (예: 0.05 = 5%)
+}
+
+/**
+ * 배당 계산 결과
+ */
+export interface CalculatePayoutResult {
+  platformFee: number; // 플랫폼 수수료
+  payoutPool: number; // 배당 풀 (수수료 제외)
+  payoutRatio: number; // 배당 비율 (승자 1원당 받는 금액)
+  winningPool: number; // 승자 풀
+  losingPool: number; // 패자 풀
+}
+
+/**
  * PRICE_PENDING → CALCULATING 전이 시 필요한 데이터
  */
 export interface CalculateRoundMetadata {
@@ -133,7 +181,7 @@ export interface CalculateRoundMetadata {
   endPriceFallbackReason?: string; // fallback인 경우 사유
   goldChangePercent: string; // 변동률, 필수
   btcChangePercent: string; // 변동률, 필수
-  winner: 'GOLD' | 'BTC' | 'DRAW'; // 필수
+  winner: RoundWinner; // 필수, DRAW 제거 (동률 시 금 승리)
 }
 
 /**
@@ -141,7 +189,7 @@ export interface CalculateRoundMetadata {
  */
 export interface SettleRoundMetadata {
   platformFeeCollected: number; // 실제 징수 금액, 필수
-  suiSettlementObjectId: string; // Sui Settlement Object ID, 필수
+  suiSettlementObjectId?: string; // Sui Settlement Object ID, Week 2까지 옵셔널
   settlementCompletedAt: number; // Epoch milliseconds, 필수
 }
 
