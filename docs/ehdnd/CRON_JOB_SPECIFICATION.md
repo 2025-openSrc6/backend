@@ -46,6 +46,52 @@ Cron Job은 라운드의 전체 생명주기를 관리합니다:
 완료
 ```
 
+### 핵심 설계 원칙 (2025-11-25)
+
+#### 1. 단일 라운드 처리
+
+각 Job은 **"가장 최근 라운드 1개"**만 처리합니다.
+
+```
+❌ 잘못된 접근: findAllScheduledRounds() → 모든 SCHEDULED 라운드 처리
+✅ 올바른 접근: findLatestScheduledRound() → 가장 최근 1개만 처리
+```
+
+**이유:**
+
+- 정상 상황에서는 항상 1개만 해당
+- 코드 단순화 및 예측 가능한 동작
+- 비정상 라운드는 CANCEL 처리 (복구 시도 안 함)
+
+#### 2. 복구 전략 분리
+
+| 범주           | Job       | 실패 시             | 이유               |
+| -------------- | --------- | ------------------- | ------------------ |
+| **돈 안 걸림** | Job 1,2,3 | CANCEL + 알림       | 복구해도 의미 없음 |
+| **돈 걸림**    | Job 4,5   | Recovery에서 재시도 | 반드시 완료해야 함 |
+
+**Job 1,2,3 실패 시:**
+
+- 해당 라운드 CANCEL
+- Slack 알림
+- 다음 6시간 후 라운드로 진행
+
+**Job 4,5 실패 시:**
+
+- CALCULATING 상태 유지
+- Recovery Job (Job 6)에서 재시도
+- 3회 실패 시 수동 개입 알림
+
+#### 3. 시간 제약 검증
+
+각 Job은 **시간 조건을 반드시 확인**합니다:
+
+| Job | 조건                          | 실패 시         |
+| --- | ----------------------------- | --------------- |
+| 2   | `startTime <= NOW < lockTime` | CANCEL          |
+| 3   | `lockTime <= NOW`             | 상태 전이       |
+| 4   | `endTime <= NOW`              | Recovery 재시도 |
+
 ### Job 개수 및 실행 주기
 
 | Job | 이름                  | 실행 주기  | 실행 시각 (KST)            |
@@ -492,10 +538,20 @@ export async function withRetry<T>(
 
 ### 핵심 작업
 
-1. **Start Price 스냅샷** (현준님 API 호출)
-2. **Sui BettingPool 생성** (Week 2+)
-3. **상태 전이**: `SCHEDULED → BETTING_OPEN`
-4. **WebSocket 발행**: `round:status_changed`
+1. **가장 최근 SCHEDULED 라운드 1개 찾기**
+2. **시간 조건 확인** (`startTime <= NOW < lockTime`)
+3. **Start Price 스냅샷** (현준님 API 호출)
+4. **상태 전이**: `SCHEDULED → BETTING_OPEN`
+5. **실패 시 CANCEL** (복구 안 함)
+
+### 설계 의사결정
+
+> **Q: 왜 "모든 SCHEDULED 라운드"가 아닌 "가장 최근 1개"만 처리하나요?**
+>
+> A: 정상 상황에서는 항상 1개만 해당합니다.
+> 만약 여러 개가 있다면 이전 Job이 실패한 것이고,
+> 이미 startTime이 지난 라운드는 복구해도 의미 없습니다 (lockTime도 지났을 것).
+> 그냥 CANCEL하고 다음 라운드로 진행하는 것이 단순하고 안전합니다.
 
 ### 구현
 
@@ -505,23 +561,23 @@ import { verifyCronAuth } from '@/lib/cron/auth';
 import { registry } from '@/lib/registry';
 import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { cronLogger } from '@/lib/cron/logger';
-import { getPrices } from '@/lib/prices/fetcher'; // 현준님 구현
-import { transitionRoundStatus } from '@/lib/rounds/fsm';
+import { getPrices } from '@/lib/prices/fetcher';
+import { sendSlackAlert } from '@/lib/cron/slack';
 
 /**
  * POST /api/cron/rounds/open
  *
  * Job 2: Round Opener
  *
- * 처리 내용:
- * 1. SCHEDULED 라운드 찾기 (startTime <= NOW)
- * 2. Start Price 스냅샷
- * 3. Sui BettingPool 생성
- * 4. status = 'BETTING_OPEN'
- * 5. WebSocket 발행
+ * 단순 로직:
+ * 1. 가장 최근 SCHEDULED 라운드 1개 찾기
+ * 2. 시간 조건 확인 (startTime <= NOW < lockTime)
+ * 3. 가격 스냅샷 가져오기
+ * 4. 상태 전이 (SCHEDULED → BETTING_OPEN)
+ * 5. 실패 시 → CANCEL + 알림 (복구 안 함)
  */
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
+  const jobStartTime = Date.now();
   cronLogger.info('[Job 2] Round Opener started');
 
   try {
@@ -532,122 +588,188 @@ export async function POST(request: NextRequest) {
       return authResult.response;
     }
 
-    // 2. SCHEDULED 라운드 찾기
-    const scheduledRounds = await registry.roundService.findScheduledRounds();
+    // 2. 가장 최근 SCHEDULED 라운드 1개만 찾기
+    const round = await registry.roundService.findLatestScheduledRound();
 
-    if (scheduledRounds.length === 0) {
-      cronLogger.info('[Job 2] No scheduled rounds to open');
-      return createSuccessResponse({ message: 'No scheduled rounds', rounds: [] });
+    if (!round) {
+      cronLogger.info('[Job 2] No scheduled round found');
+      return createSuccessResponse({ message: 'No scheduled round' });
     }
 
-    // 3. 각 라운드 시작
-    const results = [];
-    for (const round of scheduledRounds) {
-      try {
-        // 3-1. Start Price 스냅샷
-        cronLogger.info(`[Job 2] Fetching start prices for round ${round.id}`);
+    // 3. 시간 조건 확인
+    const now = Date.now();
 
-        let prices;
-        try {
-          prices = await getPrices(); // 현준님 API
-          cronLogger.info(`[Job 2] Prices fetched`, prices);
-        } catch (priceError) {
-          // Fallback 처리
-          cronLogger.error(`[Job 2] Price fetch failed, trying fallback`, priceError);
-          prices = await registry.priceService.getPricesWithFallback();
-        }
-
-        // 3-2. Sui BettingPool 생성 (Week 2+)
-        // TODO: Week 2에서 구현
-        // const suiPoolAddress = await suiClient.call({
-        //   target: `${PACKAGE_ID}::betting::create_pool`,
-        //   arguments: [round.id, round.startTime, round.endTime]
-        // });
-
-        // 3-3. 상태 전이 (FSM)
-        await transitionRoundStatus(round.id, 'BETTING_OPEN', {
-          goldStartPrice: prices.gold.toString(),
-          btcStartPrice: prices.btc.toString(),
-          priceSnapshotStartAt: prices.timestamp.toISOString(),
-          startPriceSource: prices.source,
-          startPriceIsFallback: prices.isFallback || false,
-          bettingOpenedAt: Date.now(),
-          // suiPoolAddress: suiPoolAddress, // Week 2+
-        });
-
-        cronLogger.info(`[Job 2] Round ${round.id} opened`);
-        results.push({ roundId: round.id, status: 'success' });
-
-        // 3-4. WebSocket 발행
-        // TODO: Week 3
-        // await publishWebSocketEvent('round:status_changed', {
-        //   roundId: round.id,
-        //   fromStatus: 'SCHEDULED',
-        //   toStatus: 'BETTING_OPEN',
-        //   timestamp: Date.now(),
-        // });
-      } catch (error) {
-        cronLogger.error(`[Job 2] Failed to open round ${round.id}`, error);
-        results.push({ roundId: round.id, status: 'failed', error: error.message });
-      }
+    // 3-1. startTime 아직 안 됐으면 스킵
+    if (round.startTime > now) {
+      cronLogger.info('[Job 2] Round not ready yet', {
+        roundId: round.id,
+        startTime: new Date(round.startTime).toISOString(),
+        now: new Date(now).toISOString(),
+      });
+      return createSuccessResponse({ message: 'Round not ready yet' });
     }
 
-    const duration = Date.now() - startTime;
-    cronLogger.info(`[Job 2] Completed in ${duration}ms`, { results });
+    // 3-2. lockTime 이미 지났으면 CANCEL (복구 안 함)
+    if (now >= round.lockTime) {
+      cronLogger.warn('[Job 2] Too late to open, cancelling round', {
+        roundId: round.id,
+        lockTime: new Date(round.lockTime).toISOString(),
+        now: new Date(now).toISOString(),
+      });
 
-    return createSuccessResponse({ results });
+      await registry.roundService.cancelRound(round.id, {
+        reason: 'MISSED_OPEN_WINDOW',
+        message: 'lockTime 경과로 자동 취소',
+        cancelledBy: 'SYSTEM',
+      });
+
+      await sendSlackAlert({
+        level: 'WARNING',
+        job: 'Round Opener',
+        message: `라운드 ${round.roundNumber} 오픈 실패 (lockTime 경과)`,
+        details: { roundId: round.id },
+      });
+
+      return createSuccessResponse({
+        message: 'Round cancelled (missed open window)',
+        roundId: round.id,
+      });
+    }
+
+    // 4. 가격 스냅샷 가져오기
+    cronLogger.info('[Job 2] Fetching start prices', { roundId: round.id });
+
+    const prices = await getPrices();
+
+    cronLogger.info('[Job 2] Prices fetched', {
+      gold: prices.gold,
+      btc: prices.btc,
+      source: prices.source,
+    });
+
+    // 5. 상태 전이 (SCHEDULED → BETTING_OPEN)
+    await registry.roundService.openRound(round.id, {
+      goldStartPrice: prices.gold.toString(),
+      btcStartPrice: prices.btc.toString(),
+      priceSnapshotStartAt: prices.timestamp.toISOString(),
+      startPriceSource: prices.source,
+    });
+
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.info('[Job 2] Completed', {
+      roundId: round.id,
+      roundNumber: round.roundNumber,
+      durationMs: jobDuration,
+    });
+
+    return createSuccessResponse({
+      round: {
+        id: round.id,
+        roundNumber: round.roundNumber,
+        status: 'BETTING_OPEN',
+      },
+    });
   } catch (error) {
-    const duration = Date.now() - startTime;
-    cronLogger.error(`[Job 2] Failed after ${duration}ms`, error);
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.error('[Job 2] Failed', {
+      durationMs: jobDuration,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    // 실패 시 알림 (복구는 안 함 - 돈 안 걸린 Job)
+    await sendSlackAlert({
+      level: 'ERROR',
+      job: 'Round Opener',
+      message: '라운드 오픈 실패',
+      details: { error: error instanceof Error ? error.message : String(error) },
+    });
+
     return handleApiError(error);
   }
 }
 ```
 
-### Fallback 처리 (가격 API 실패 시)
+### Service Layer 메서드
 
 ```typescript
-// lib/prices/fetcher.ts (현준님 구현 예정)
+// lib/rounds/round.service.ts
 
 /**
- * Fallback이 적용된 가격 조회
+ * 가장 최근 SCHEDULED 라운드 1개 찾기
  *
- * 우선순위:
- * 1. 실시간 API 호출
- * 2. Redis 캐시 (TTL 10분 이내)
- * 3. 실패 → DELAYED 상태로 전환 후 재시도
+ * 왜 "모든 SCHEDULED"가 아닌 "가장 최근 1개"인가?
+ * - 정상 상황: 항상 1개만 존재
+ * - 비정상 상황: 이전 라운드가 밀려있으면 CANCEL 대상
  */
-export async function getPricesWithFallback(): Promise<PriceData> {
-  try {
-    // 1순위: 실시간 API
-    return await getPrices();
-  } catch (error) {
-    cronLogger.warn('[Prices] Real-time fetch failed, trying cache', error);
+async findLatestScheduledRound(): Promise<Round | null> {
+  const result = await this.db
+    .select()
+    .from(rounds)
+    .where(eq(rounds.status, 'SCHEDULED'))
+    .orderBy(desc(rounds.startTime))
+    .limit(1);
 
-    // 2순위: Redis 캐시
-    const cachedGold = await redis.get('price:gold:latest');
-    const cachedBtc = await redis.get('price:btc:latest');
-    const cachedTimestamp = await redis.get('price:timestamp:latest');
+  return result[0] || null;
+}
 
-    if (cachedGold && cachedBtc && cachedTimestamp) {
-      const cacheAge = Date.now() - parseInt(cachedTimestamp);
-
-      // 10분 이내 캐시만 사용
-      if (cacheAge < 10 * 60 * 1000) {
-        cronLogger.info('[Prices] Using cached prices', { cacheAge });
-        return {
-          gold: parseFloat(cachedGold),
-          btc: parseFloat(cachedBtc),
-          timestamp: new Date(parseInt(cachedTimestamp)),
-          source: 'redis',
-          isFallback: true,
-        };
-      }
-    }
-
-    // 3순위: 실패
-    throw new AppError('PRICE_FETCH_FAILED', '가격 조회 실패 (Fallback도 실패)');
+/**
+ * 라운드 오픈 (SCHEDULED → BETTING_OPEN)
+ */
+async openRound(
+  roundId: string,
+  priceData: {
+    goldStartPrice: string;
+    btcStartPrice: string;
+    priceSnapshotStartAt: string;
+    startPriceSource: string;
   }
+): Promise<Round> {
+  return this.transitionStatus(roundId, 'BETTING_OPEN', {
+    ...priceData,
+    bettingOpenedAt: Date.now(),
+  });
+}
+
+/**
+ * 라운드 취소
+ */
+async cancelRound(
+  roundId: string,
+  params: {
+    reason: string;
+    message: string;
+    cancelledBy: 'SYSTEM' | 'ADMIN';
+  }
+): Promise<Round> {
+  return this.transitionStatus(roundId, 'CANCELLED', {
+    cancellationReason: params.reason,
+    cancellationMessage: params.message,
+    cancelledBy: params.cancelledBy,
+    cancelledAt: Date.now(),
+  });
+}
+```
+
+### 가격 API 실패 시
+
+> **설계 변경**: Fallback/Retry 로직을 Job 2에서 직접 구현하지 않습니다.
+> 가격 API (현준님 구현)에서 내부적으로 처리하고, 최종 실패 시 에러를 throw합니다.
+> Job 2는 에러 받으면 그냥 실패 처리 + 알림합니다.
+
+```typescript
+// lib/prices/fetcher.ts (현준님 구현)
+
+/**
+ * 가격 조회 (내부 Fallback 포함)
+ *
+ * 호출자는 이 함수만 호출하면 됨.
+ * 실패 시 에러 throw → 호출자가 처리
+ */
+export async function getPrices(): Promise<PriceData> {
+  // 현준님이 내부적으로:
+  // 1. 실시간 API 시도
+  // 2. 실패 시 캐시 사용
+  // 3. 최종 실패 시 throw
 }
 ```
 
@@ -664,6 +786,22 @@ export async function getPricesWithFallback(): Promise<PriceData> {
 - **KST**: 02:01, 08:01, 14:01, 20:01
 - **UTC**: 17:01, 23:01, 05:01, 11:01
 
+### 핵심 작업
+
+1. **가장 최근 BETTING_OPEN 라운드 1개 찾기**
+2. **시간 조건 확인** (`lockTime <= NOW`)
+3. **상태 전이**: `BETTING_OPEN → BETTING_LOCKED`
+4. **실패해도 괜찮음** (API에서 lockTime 검사함)
+
+### 설계 의사결정
+
+> **Q: Job 3이 실패하면 어떻게 되나요?**
+>
+> A: 베팅 API에서 이미 lockTime을 검사하므로 실제로 베팅이 들어오지 않습니다.
+> DB 상태만 BETTING_OPEN이지, 실질적으로는 마감된 상태입니다.
+> Job 4 (Finalize)에서 자연스럽게 처리되거나, Recovery에서 잡힙니다.
+> **별도 복구 로직이 필요 없습니다.**
+
 ### 구현
 
 ```typescript
@@ -672,96 +810,118 @@ import { verifyCronAuth } from '@/lib/cron/auth';
 import { registry } from '@/lib/registry';
 import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { cronLogger } from '@/lib/cron/logger';
-import { transitionRoundStatus } from '@/lib/rounds/fsm';
 
 /**
  * POST /api/cron/rounds/lock
  *
  * Job 3: Betting Locker
  *
- * 처리 내용:
- * 1. BETTING_OPEN 라운드 찾기 (lockTime <= NOW)
- * 2. Sui Pool 잠금 (Week 2+)
- * 3. status = 'BETTING_LOCKED'
- * 4. WebSocket 발행
+ * 단순 로직:
+ * 1. 가장 최근 BETTING_OPEN 라운드 1개 찾기
+ * 2. lockTime <= NOW 확인
+ * 3. 상태 전이 (BETTING_OPEN → BETTING_LOCKED)
+ * 4. 실패해도 API에서 막고 있으니 치명적이지 않음
  */
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
+  const jobStartTime = Date.now();
   cronLogger.info('[Job 3] Betting Locker started');
 
   try {
     // 1. 인증 검증
     const authResult = await verifyCronAuth(request);
     if (!authResult.success) {
+      cronLogger.warn('[Job 3] Auth failed');
       return authResult.response;
     }
 
-    // 2. BETTING_OPEN 라운드 찾기
-    const openRounds = await registry.roundService.findOpenRounds();
+    // 2. 가장 최근 BETTING_OPEN 라운드 1개 찾기
+    const round = await registry.roundService.findLatestOpenRound();
 
-    if (openRounds.length === 0) {
-      cronLogger.info('[Job 3] No open rounds to lock');
-      return createSuccessResponse({ message: 'No open rounds', rounds: [] });
+    if (!round) {
+      cronLogger.info('[Job 3] No open round found');
+      return createSuccessResponse({ message: 'No open round' });
     }
 
-    // 3. 각 라운드 마감
-    const results = [];
-    for (const round of openRounds) {
-      try {
-        // 3-1. Sui Pool 잠금 (Week 2+)
-        // TODO: Week 2에서 구현
-        // await suiClient.call({
-        //   target: `${PACKAGE_ID}::betting::lock_pool`,
-        //   arguments: [round.suiPoolAddress]
-        // });
+    // 3. 시간 조건 확인 (lockTime이 지났는지)
+    const now = Date.now();
 
-        // 3-2. 상태 전이
-        await transitionRoundStatus(round.id, 'BETTING_LOCKED', {
-          bettingLockedAt: Date.now(),
-        });
-
-        cronLogger.info(`[Job 3] Round ${round.id} locked`);
-        results.push({ roundId: round.id, status: 'success' });
-
-        // 3-3. WebSocket 발행
-        // TODO: Week 3
-      } catch (error) {
-        cronLogger.error(`[Job 3] Failed to lock round ${round.id}`, error);
-        results.push({ roundId: round.id, status: 'failed', error: error.message });
-      }
+    if (round.lockTime > now) {
+      cronLogger.info('[Job 3] Round not ready to lock yet', {
+        roundId: round.id,
+        lockTime: new Date(round.lockTime).toISOString(),
+        now: new Date(now).toISOString(),
+      });
+      return createSuccessResponse({ message: 'Round not ready to lock' });
     }
 
-    const duration = Date.now() - startTime;
-    cronLogger.info(`[Job 3] Completed in ${duration}ms`, { results });
+    // 4. 상태 전이 (BETTING_OPEN → BETTING_LOCKED)
+    await registry.roundService.lockRound(round.id);
 
-    return createSuccessResponse({ results });
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.info('[Job 3] Completed', {
+      roundId: round.id,
+      roundNumber: round.roundNumber,
+      durationMs: jobDuration,
+    });
+
+    return createSuccessResponse({
+      round: {
+        id: round.id,
+        roundNumber: round.roundNumber,
+        status: 'BETTING_LOCKED',
+      },
+    });
   } catch (error) {
-    const duration = Date.now() - startTime;
-    cronLogger.error(`[Job 3] Failed after ${duration}ms`, error);
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.error('[Job 3] Failed', {
+      durationMs: jobDuration,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    // 실패해도 치명적이지 않음 (API에서 lockTime 검사)
+    // Slack 알림은 보내되, 복구는 안 함
     return handleApiError(error);
   }
 }
 ```
 
-### Service Layer
+### Service Layer 메서드
 
 ```typescript
-/**
- * BETTING_OPEN 상태이고 lockTime이 경과한 라운드 찾기
- */
-async findOpenRounds(): Promise<Round[]> {
-  const now = Date.now();
+// lib/rounds/round.service.ts
 
-  return this.db
+/**
+ * 가장 최근 BETTING_OPEN 라운드 1개 찾기
+ */
+async findLatestOpenRound(): Promise<Round | null> {
+  const result = await this.db
     .select()
     .from(rounds)
-    .where(
-      and(
-        eq(rounds.status, 'BETTING_OPEN'),
-        lte(rounds.lockTime, now)
-      )
-    )
-    .orderBy(asc(rounds.lockTime));
+    .where(eq(rounds.status, 'BETTING_OPEN'))
+    .orderBy(desc(rounds.startTime))
+    .limit(1);
+
+  return result[0] || null;
+}
+
+/**
+ * 라운드 마감 (BETTING_OPEN → BETTING_LOCKED)
+ */
+async lockRound(roundId: string): Promise<Round> {
+  return this.transitionStatus(roundId, 'BETTING_LOCKED', {
+    bettingLockedAt: Date.now(),
+  });
+}
+```
+
+### 베팅 API의 시간 검증 (이미 구현됨)
+
+Job 3이 실패해도 베팅이 막히는 이유:
+
+```typescript
+// POST /api/bets 에서
+if (now >= round.lockTime) {
+  throw new AppError('BETTING_CLOSED', '베팅 시간이 종료되었습니다');
 }
 ```
 
@@ -775,16 +935,31 @@ async findOpenRounds(): Promise<Round[]> {
 
 ### 실행 시각
 
-- **KST**: 02:00, 08:00, 14:00, 20:00 (Job 2와 동일)
+- **KST**: 02:00, 08:00, 14:00, 20:00 (Job 2와 동일, Job 2보다 먼저 실행)
 - **UTC**: 17:00, 23:00, 05:00, 11:00
 
 ### 핵심 작업
 
-1. **End Price 스냅샷**
-2. **승자 판정** (금 vs 비트 변동률 비교)
-3. **배당 계산**
-4. **상태 전이**: `BETTING_LOCKED → PRICE_PENDING → CALCULATING`
-5. **Job 5 트리거** (정산 처리)
+1. **가장 최근 BETTING_LOCKED 라운드 1개 찾기**
+2. **시간 조건 확인** (`endTime <= NOW`)
+3. **End Price 스냅샷**
+4. **승자 판정 + 배당 계산**
+5. **상태 전이**: `BETTING_LOCKED → CALCULATING`
+6. **Job 5 트리거** (정산 처리)
+7. **실패 시 Recovery에서 재시도** (돈이 걸린 Job!)
+
+### 설계 의사결정
+
+> **Q: 왜 Job 4는 실패 시 CANCEL이 아닌 Recovery 재시도인가요?**
+>
+> A: **돈이 걸려있기 때문입니다.**
+> Job 4가 실패하면 베팅한 유저들이 결과를 받지 못합니다.
+> CALCULATING 상태로 두고 Recovery Job에서 재시도해야 합니다.
+
+> **Q: PRICE_PENDING 상태가 필요한가요?**
+>
+> A: 단순화를 위해 BETTING_LOCKED → CALCULATING으로 직접 전이합니다.
+> PRICE_PENDING은 "가격 조회 중" 표시용이었는데, 실제로 수 초 내에 완료되므로 생략합니다.
 
 ### 구현
 
@@ -794,119 +969,195 @@ import { verifyCronAuth } from '@/lib/cron/auth';
 import { registry } from '@/lib/registry';
 import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { cronLogger } from '@/lib/cron/logger';
-import { getPricesWithFallback } from '@/lib/prices/fetcher';
-import { transitionRoundStatus } from '@/lib/rounds/fsm';
+import { getPrices } from '@/lib/prices/fetcher';
 import { determineWinner, calculatePayout } from '@/lib/rounds/calculator';
+import { sendSlackAlert } from '@/lib/cron/slack';
+import { getPlatformFeeRate } from '@/lib/config/cron';
 
 /**
  * POST /api/cron/rounds/finalize
  *
  * Job 4: Round Finalizer
  *
- * 처리 내용:
- * 1. BETTING_LOCKED 라운드 찾기 (endTime <= NOW)
- * 2. End Price 스냅샷
- * 3. 승자 판정
- * 4. 배당 계산
- * 5. status = 'CALCULATING'
+ * 단순 로직:
+ * 1. 가장 최근 BETTING_LOCKED 라운드 1개 찾기
+ * 2. endTime <= NOW 확인
+ * 3. End Price 스냅샷 가져오기
+ * 4. 승자 판정 + 배당 계산
+ * 5. 상태 전이 (BETTING_LOCKED → CALCULATING)
  * 6. Job 5 트리거
+ * 7. 실패 시 → Recovery에서 재시도 (돈이 걸린 Job!)
  */
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
+  const jobStartTime = Date.now();
   cronLogger.info('[Job 4] Round Finalizer started');
 
   try {
     // 1. 인증 검증
     const authResult = await verifyCronAuth(request);
     if (!authResult.success) {
+      cronLogger.warn('[Job 4] Auth failed');
       return authResult.response;
     }
 
-    // 2. BETTING_LOCKED 라운드 찾기
-    const lockedRounds = await registry.roundService.findLockedRounds();
+    // 2. 가장 최근 BETTING_LOCKED 라운드 1개 찾기
+    const round = await registry.roundService.findLatestLockedRound();
 
-    if (lockedRounds.length === 0) {
-      cronLogger.info('[Job 4] No locked rounds to finalize');
-      return createSuccessResponse({ message: 'No locked rounds', rounds: [] });
+    if (!round) {
+      cronLogger.info('[Job 4] No locked round found');
+      return createSuccessResponse({ message: 'No locked round' });
     }
 
-    // 3. 각 라운드 종료
-    const results = [];
-    for (const round of lockedRounds) {
-      try {
-        // 3-1. End Price 스냅샷
-        cronLogger.info(`[Job 4] Fetching end prices for round ${round.id}`);
-        const prices = await getPricesWithFallback();
+    // 3. 시간 조건 확인 (endTime이 지났는지)
+    const now = Date.now();
 
-        // 3-2. 승자 판정
-        const winner = determineWinner({
-          goldStart: parseFloat(round.goldStartPrice!),
-          goldEnd: prices.gold,
-          btcStart: parseFloat(round.btcStartPrice!),
-          btcEnd: prices.btc,
-        });
-
-        cronLogger.info(`[Job 4] Winner determined: ${winner}`, {
-          roundId: round.id,
-          winner,
-        });
-
-        // 3-3. 배당 계산
-        const payout = calculatePayout({
-          winner,
-          totalPool: round.totalPool,
-          totalGoldBets: round.totalGoldBets,
-          totalBtcBets: round.totalBtcBets,
-          platformFeeRate: 0.05, // 5%
-        });
-
-        // 3-4. 상태 전이 (BETTING_LOCKED → PRICE_PENDING → CALCULATING)
-        await transitionRoundStatus(round.id, 'PRICE_PENDING', {
-          goldEndPrice: prices.gold.toString(),
-          btcEndPrice: prices.btc.toString(),
-          priceSnapshotEndAt: prices.timestamp.toISOString(),
-          endPriceSource: prices.source,
-          endPriceIsFallback: prices.isFallback || false,
-          roundEndedAt: Date.now(),
-        });
-
-        await transitionRoundStatus(round.id, 'CALCULATING', {
-          winner,
-          goldChangePercent: payout.goldChangePercent.toString(),
-          btcChangePercent: payout.btcChangePercent.toString(),
-          platformFee: payout.platformFee,
-          payoutPool: payout.payoutPool,
-          payoutRatio: payout.payoutRatio.toString(),
-          settlementStartedAt: Date.now(),
-        });
-
-        cronLogger.info(`[Job 4] Round ${round.id} finalized`);
-        results.push({ roundId: round.id, status: 'success', winner });
-
-        // 3-5. Job 5 트리거 (정산 처리)
-        await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/cron/rounds/settle`, {
-          method: 'POST',
-          headers: {
-            'X-Cron-Secret': process.env.CRON_SECRET!,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ roundId: round.id }),
-        });
-      } catch (error) {
-        cronLogger.error(`[Job 4] Failed to finalize round ${round.id}`, error);
-        results.push({ roundId: round.id, status: 'failed', error: error.message });
-      }
+    if (round.endTime > now) {
+      cronLogger.info('[Job 4] Round not ready to finalize yet', {
+        roundId: round.id,
+        endTime: new Date(round.endTime).toISOString(),
+        now: new Date(now).toISOString(),
+      });
+      return createSuccessResponse({ message: 'Round not ready to finalize' });
     }
 
-    const duration = Date.now() - startTime;
-    cronLogger.info(`[Job 4] Completed in ${duration}ms`, { results });
+    // 4. End Price 스냅샷 가져오기
+    cronLogger.info('[Job 4] Fetching end prices', { roundId: round.id });
 
-    return createSuccessResponse({ results });
+    const prices = await getPrices();
+
+    cronLogger.info('[Job 4] Prices fetched', {
+      gold: prices.gold,
+      btc: prices.btc,
+      source: prices.source,
+    });
+
+    // 5. 승자 판정
+    const winnerResult = determineWinner({
+      goldStart: parseFloat(round.goldStartPrice!),
+      goldEnd: prices.gold,
+      btcStart: parseFloat(round.btcStartPrice!),
+      btcEnd: prices.btc,
+    });
+
+    cronLogger.info('[Job 4] Winner determined', {
+      roundId: round.id,
+      winner: winnerResult.winner,
+      goldChangePercent: winnerResult.goldChangePercent,
+      btcChangePercent: winnerResult.btcChangePercent,
+    });
+
+    // 6. 배당 계산
+    const payoutResult = calculatePayout({
+      winner: winnerResult.winner,
+      totalPool: round.totalPool,
+      totalGoldBets: round.totalGoldBets,
+      totalBtcBets: round.totalBtcBets,
+      platformFeeRate: getPlatformFeeRate(),
+    });
+
+    // 7. 상태 전이 (BETTING_LOCKED → CALCULATING)
+    await registry.roundService.finalizeRound(round.id, {
+      goldEndPrice: prices.gold.toString(),
+      btcEndPrice: prices.btc.toString(),
+      priceSnapshotEndAt: prices.timestamp.toISOString(),
+      endPriceSource: prices.source,
+      winner: winnerResult.winner,
+      goldChangePercent: winnerResult.goldChangePercent.toString(),
+      btcChangePercent: winnerResult.btcChangePercent.toString(),
+      platformFee: payoutResult.platformFee,
+      payoutPool: payoutResult.payoutPool,
+      payoutRatio: payoutResult.payoutRatio.toString(),
+    });
+
+    // 8. Job 5 트리거 (정산 처리)
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    await fetch(`${baseUrl}/api/cron/rounds/settle`, {
+      method: 'POST',
+      headers: {
+        'X-Cron-Secret': process.env.CRON_SECRET!,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ roundId: round.id }),
+    });
+
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.info('[Job 4] Completed', {
+      roundId: round.id,
+      roundNumber: round.roundNumber,
+      winner: winnerResult.winner,
+      durationMs: jobDuration,
+    });
+
+    return createSuccessResponse({
+      round: {
+        id: round.id,
+        roundNumber: round.roundNumber,
+        status: 'CALCULATING',
+        winner: winnerResult.winner,
+      },
+    });
   } catch (error) {
-    const duration = Date.now() - startTime;
-    cronLogger.error(`[Job 4] Failed after ${duration}ms`, error);
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.error('[Job 4] Failed', {
+      durationMs: jobDuration,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    // 실패 시 알림 (Recovery에서 재시도 - 돈이 걸린 Job!)
+    await sendSlackAlert({
+      level: 'ERROR',
+      job: 'Round Finalizer',
+      message: '라운드 종료 실패 - Recovery에서 재시도 필요',
+      details: { error: error instanceof Error ? error.message : String(error) },
+    });
+
     return handleApiError(error);
   }
+}
+```
+
+### Service Layer 메서드
+
+```typescript
+// lib/rounds/round.service.ts
+
+/**
+ * 가장 최근 BETTING_LOCKED 라운드 1개 찾기
+ */
+async findLatestLockedRound(): Promise<Round | null> {
+  const result = await this.db
+    .select()
+    .from(rounds)
+    .where(eq(rounds.status, 'BETTING_LOCKED'))
+    .orderBy(desc(rounds.startTime))
+    .limit(1);
+
+  return result[0] || null;
+}
+
+/**
+ * 라운드 종료 (BETTING_LOCKED → CALCULATING)
+ */
+async finalizeRound(
+  roundId: string,
+  data: {
+    goldEndPrice: string;
+    btcEndPrice: string;
+    priceSnapshotEndAt: string;
+    endPriceSource: string;
+    winner: 'GOLD' | 'BTC';
+    goldChangePercent: string;
+    btcChangePercent: string;
+    platformFee: number;
+    payoutPool: number;
+    payoutRatio: string;
+  }
+): Promise<Round> {
+  return this.transitionStatus(roundId, 'CALCULATING', {
+    ...data,
+    roundEndedAt: Date.now(),
+    settlementStartedAt: Date.now(),
+  });
 }
 ```
 
@@ -915,6 +1166,15 @@ export async function POST(request: NextRequest) {
 > 💡 **의사결정**: DRAW(무승부) 제거됨. 동률 시 금 승리. 자세한 내용은 `CRON_DECISIONS.md` 참조.
 
 ```typescript
+/**
+ * 승자 판정 결과
+ */
+export interface WinnerResult {
+  winner: 'GOLD' | 'BTC';
+  goldChangePercent: number;
+  btcChangePercent: number;
+}
+
 /**
  * 승자 판정
  *
@@ -927,21 +1187,35 @@ export function determineWinner(params: {
   goldEnd: number;
   btcStart: number;
   btcEnd: number;
-}): 'GOLD' | 'BTC' {
+}): WinnerResult {
   const { goldStart, goldEnd, btcStart, btcEnd } = params;
 
   // 변동률 계산 (%)
-  const goldChange = ((goldEnd - goldStart) / goldStart) * 100;
-  const btcChange = ((btcEnd - btcStart) / btcStart) * 100;
+  const goldChangePercent = ((goldEnd - goldStart) / goldStart) * 100;
+  const btcChangePercent = ((btcEnd - btcStart) / btcStart) * 100;
 
   // 금 변동률 >= 비트 변동률 → 금 승리 (동률 시 금)
-  return goldChange >= btcChange ? 'GOLD' : 'BTC';
+  const winner = goldChangePercent >= btcChangePercent ? 'GOLD' : 'BTC';
+
+  return {
+    winner,
+    goldChangePercent,
+    btcChangePercent,
+  };
+}
+
+/**
+ * 배당 계산 결과
+ */
+export interface PayoutResult {
+  platformFee: number;
+  payoutPool: number;
+  payoutRatio: number;
+  winningPool: number;
 }
 
 /**
  * 배당 계산
- *
- * 참고: DRAW 제거됨 - 동률 시 금 승리로 단순화
  */
 export function calculatePayout(params: {
   winner: 'GOLD' | 'BTC';
@@ -949,7 +1223,7 @@ export function calculatePayout(params: {
   totalGoldBets: number;
   totalBtcBets: number;
   platformFeeRate: number;
-}) {
+}): PayoutResult {
   const { winner, totalPool, totalGoldBets, totalBtcBets, platformFeeRate } = params;
 
   // 플랫폼 수수료
@@ -959,7 +1233,7 @@ export function calculatePayout(params: {
   // 승자 풀
   const winningPool = winner === 'GOLD' ? totalGoldBets : totalBtcBets;
 
-  // 배당 비율
+  // 배당 비율 (승자 1 DEL당 받는 금액)
   const payoutRatio = winningPool > 0 ? payoutPool / winningPool : 0;
 
   return {
@@ -981,200 +1255,28 @@ export function calculatePayout(params: {
 
 ### 실행 방식
 
-**이벤트 기반** (Job 4가 트리거)
+**이벤트 기반** (Job 4가 트리거) + **Recovery에서 재시도**
 
 ### 핵심 작업
 
-1. **Sui Settlement Object 생성**
-2. **승자에게 배당 전송** (루프)
-3. **패자 상태 업데이트**
-4. **상태 전이**: `CALCULATING → SETTLED/VOIDED`
-5. **WebSocket 발행**
+1. **CALCULATING 라운드 조회**
+2. **승자/패자 베팅 분류**
+3. **각 승자에게 배당 계산 + 전송**
+4. **패자 상태 업데이트**
+5. **상태 전이**: `CALCULATING → SETTLED`
+6. **실패 시 Recovery에서 재시도** (돈이 걸린 Job!)
 
-### 구현
+### 설계 의사결정
 
-```typescript
-import { NextRequest } from 'next/server';
-import { verifyCronAuth } from '@/lib/cron/auth';
-import { registry } from '@/lib/registry';
-import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
-import { cronLogger } from '@/lib/cron/logger';
-import { transitionRoundStatus } from '@/lib/rounds/fsm';
+> **Q: 왜 멱등성이 중요한가요?**
+>
+> A: Recovery에서 재시도될 수 있기 때문입니다.
+> 이미 정산된 베팅은 건너뛰고, 실패한 베팅만 재처리해야 합니다.
 
-/**
- * POST /api/cron/rounds/settle
- *
- * Job 5: Settlement Processor
- *
- * 처리 내용:
- * 1. CALCULATING 라운드 조회
- * 2. 승자 베팅 목록 조회
- * 3. Sui Settlement Object 생성
- * 4. 각 승자에게 배당 전송
- * 5. 패자 상태 업데이트
- * 6. status = 'SETTLED' or 'VOIDED'
- * 7. WebSocket 발행
- */
-export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-  const body = await request.json();
-  const { roundId } = body;
-
-  cronLogger.info(`[Job 5] Settlement Processor started for round ${roundId}`);
-
-  try {
-    // 1. 인증 검증
-    const authResult = await verifyCronAuth(request);
-    if (!authResult.success) {
-      return authResult.response;
-    }
-
-    // 2. 라운드 조회
-    const round = await registry.roundService.findRoundById(roundId);
-
-    if (!round || round.status !== 'CALCULATING') {
-      throw new AppError('NO_CALCULATING_ROUND', 'Round not in CALCULATING status');
-    }
-
-    // 3. 승자/패자 베팅 조회
-    const allBets = await registry.betService.findBetsByRoundId(roundId);
-    const winningBets = allBets.filter((bet) => bet.prediction === round.winner);
-    const losingBets = allBets.filter((bet) => bet.prediction !== round.winner);
-
-    cronLogger.info(`[Job 5] Found ${winningBets.length} winners, ${losingBets.length} losers`);
-
-    // 4. 정상 정산 (DRAW 제거됨 - 항상 승자/패자 존재)
-    // 5-1. Sui Settlement Object 생성
-    // TODO: Week 2
-    // const suiSettlementObjectId = await suiClient.call({
-    //   target: `${PACKAGE_ID}::settlement::finalize_round`,
-    //   arguments: [roundId, round.winner, round.totalPool, round.payoutPool]
-    // });
-
-    // 5-2. 각 승자에게 배당 전송
-    let settledCount = 0;
-    let failedCount = 0;
-
-    for (const bet of winningBets) {
-      try {
-        // 개별 배당 계산
-        const winningPool = round.winner === 'GOLD' ? round.totalGoldBets : round.totalBtcBets;
-        const userShare = bet.amount / winningPool;
-        const payout = Math.floor(userShare * round.payoutPool);
-
-        // Sui Payout 전송
-        // TODO: Week 2
-        // const txHash = await suiClient.call({
-        //   target: `${PACKAGE_ID}::settlement::distribute_payout`,
-        //   arguments: [bet.suiBetObjectId, bet.userAddress, payout]
-        // });
-
-        // D1 업데이트
-        await registry.betService.updateBetSettlement(bet.id, {
-          settlementStatus: 'COMPLETED',
-          resultStatus: 'WON',
-          payoutAmount: payout,
-          // suiPayoutTxHash: txHash,
-          settledAt: Date.now(),
-        });
-
-        settledCount++;
-      } catch (error) {
-        cronLogger.error(`[Job 5] Failed to settle bet ${bet.id}`, error);
-
-        await registry.betService.updateBetSettlement(bet.id, {
-          settlementStatus: 'FAILED',
-        });
-
-        failedCount++;
-      }
-    }
-
-    // 5-3. 패자 처리 (Sui 전송 없음)
-    for (const bet of losingBets) {
-      await registry.betService.updateBetSettlement(bet.id, {
-        settlementStatus: 'COMPLETED',
-        resultStatus: 'LOST',
-        payoutAmount: 0,
-        settledAt: Date.now(),
-      });
-    }
-
-    // 6. 라운드 최종 상태 업데이트
-    if (failedCount === 0) {
-      await transitionRoundStatus(round.id, 'SETTLED', {
-        // suiSettlementObjectId,
-        totalWinners: winningBets.length,
-        totalLosers: losingBets.length,
-        settlementCompletedAt: Date.now(),
-      });
-
-      cronLogger.info(`[Job 5] Round ${round.id} settled successfully`);
-    } else {
-      cronLogger.warn(`[Job 5] Round ${round.id} partially settled`, {
-        settledCount,
-        failedCount,
-      });
-
-      // 재시도 카운트 증가
-      await registry.roundService.incrementRetryCount(round.id);
-    }
-
-    const duration = Date.now() - startTime;
-    cronLogger.info(`[Job 5] Completed in ${duration}ms`, { settledCount, failedCount });
-
-    return createSuccessResponse({
-      round: { id: round.id, status: failedCount === 0 ? 'SETTLED' : 'CALCULATING' },
-      settledBets: settledCount + losingBets.length,
-      payoutsSent: settledCount,
-    });
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    cronLogger.error(`[Job 5] Failed after ${duration}ms`, error);
-    return handleApiError(error);
-  }
-}
-
-// 참고: processDrawSettlement 함수 제거됨
-// DRAW가 없으므로 무승부 정산 로직 불필요
-// 자세한 내용은 CRON_DECISIONS.md 참조
-```
-
-### 멱등성 보장
-
-```typescript
-/**
- * 정산 상태 확인 후 건너뛰기
- */
-async function settleBetIdempotent(bet: Bet, payout: number) {
-  // 이미 정산된 베팅은 건너뛰기
-  if (bet.settlementStatus === 'COMPLETED') {
-    cronLogger.info(`[Job 5] Bet ${bet.id} already settled, skipping`);
-    return;
-  }
-
-  // 정산 처리...
-}
-```
-
----
-
-## Job 6: Recovery & Monitoring
-
-### 목적
-
-실패한 정산 복구 및 시스템 모니터링
-
-### 실행 시각
-
-**매분** (`* * * * *`)
-
-### 핵심 작업
-
-1. **장시간 멈춰있는 라운드 찾기** (CALCULATING 10분+)
-2. **미정산 베팅 재시도**
-3. **3회 실패 라운드 → Slack 알림**
-4. **서버 재시작 시 자동 복구**
+> **Q: VOIDED 상태는 언제 사용하나요?**
+>
+> A: DRAW가 제거되어 정상 플로우에서는 사용하지 않습니다.
+> 시스템 오류로 정산 불가 시 수동으로 VOIDED 처리 후 전액 환불합니다.
 
 ### 구현
 
@@ -1185,51 +1287,397 @@ import { registry } from '@/lib/registry';
 import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { cronLogger } from '@/lib/cron/logger';
 import { sendSlackAlert } from '@/lib/cron/slack';
+import { AppError } from '@/lib/shared/errors';
+
+/**
+ * POST /api/cron/rounds/settle
+ *
+ * Job 5: Settlement Processor
+ *
+ * 단순 로직:
+ * 1. roundId로 CALCULATING 라운드 조회
+ * 2. 승자/패자 베팅 분류
+ * 3. 각 승자에게 배당 계산 + DB 업데이트
+ * 4. 패자 상태 업데이트
+ * 5. 상태 전이 (CALCULATING → SETTLED)
+ * 6. 실패 시 → Recovery에서 재시도 (돈이 걸린 Job!)
+ */
+export async function POST(request: NextRequest) {
+  const jobStartTime = Date.now();
+
+  try {
+    // 1. 인증 검증
+    const authResult = await verifyCronAuth(request);
+    if (!authResult.success) {
+      cronLogger.warn('[Job 5] Auth failed');
+      return authResult.response;
+    }
+
+    // 2. roundId 파싱
+    const body = await request.json();
+    const { roundId } = body;
+
+    if (!roundId) {
+      throw new AppError('INVALID_REQUEST', 'roundId is required');
+    }
+
+    cronLogger.info('[Job 5] Settlement Processor started', { roundId });
+
+    // 3. 라운드 조회
+    const round = await registry.roundService.findRoundById(roundId);
+
+    if (!round) {
+      throw new AppError('ROUND_NOT_FOUND', `Round not found: ${roundId}`);
+    }
+
+    if (round.status !== 'CALCULATING') {
+      cronLogger.info('[Job 5] Round not in CALCULATING status', {
+        roundId,
+        currentStatus: round.status,
+      });
+      return createSuccessResponse({
+        message: 'Round not in CALCULATING status',
+        roundId,
+        currentStatus: round.status,
+      });
+    }
+
+    // 4. 베팅 조회
+    const allBets = await registry.betService.findBetsByRoundId(roundId);
+
+    if (allBets.length === 0) {
+      cronLogger.info('[Job 5] No bets to settle', { roundId });
+
+      // 베팅 없으면 바로 SETTLED
+      await registry.roundService.settleRound(roundId, {
+        totalWinners: 0,
+        totalLosers: 0,
+      });
+
+      return createSuccessResponse({
+        round: { id: roundId, status: 'SETTLED' },
+        settledBets: 0,
+      });
+    }
+
+    // 5. 승자/패자 분류
+    const winningBets = allBets.filter((bet) => bet.prediction === round.winner);
+    const losingBets = allBets.filter((bet) => bet.prediction !== round.winner);
+
+    cronLogger.info('[Job 5] Bets classified', {
+      roundId,
+      winners: winningBets.length,
+      losers: losingBets.length,
+    });
+
+    // 6. 승자 풀 계산
+    const winningPool = round.winner === 'GOLD' ? round.totalGoldBets : round.totalBtcBets;
+
+    // 7. 각 승자 정산 (멱등성 보장)
+    let settledCount = 0;
+    let failedCount = 0;
+
+    for (const bet of winningBets) {
+      try {
+        // 이미 정산된 베팅은 건너뛰기 (멱등성)
+        if (bet.settlementStatus === 'COMPLETED') {
+          cronLogger.info('[Job 5] Bet already settled, skipping', { betId: bet.id });
+          settledCount++;
+          continue;
+        }
+
+        // 개별 배당 계산
+        const userShare = bet.amount / winningPool;
+        const payout = Math.floor(userShare * round.payoutPool);
+
+        // DB 업데이트
+        await registry.betService.updateBetSettlement(bet.id, {
+          settlementStatus: 'COMPLETED',
+          resultStatus: 'WON',
+          payoutAmount: payout,
+          settledAt: Date.now(),
+        });
+
+        settledCount++;
+      } catch (error) {
+        cronLogger.error('[Job 5] Failed to settle winning bet', {
+          betId: bet.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        await registry.betService.updateBetSettlement(bet.id, {
+          settlementStatus: 'FAILED',
+        });
+
+        failedCount++;
+      }
+    }
+
+    // 8. 패자 처리
+    for (const bet of losingBets) {
+      // 이미 처리된 베팅 건너뛰기
+      if (bet.settlementStatus === 'COMPLETED') continue;
+
+      await registry.betService.updateBetSettlement(bet.id, {
+        settlementStatus: 'COMPLETED',
+        resultStatus: 'LOST',
+        payoutAmount: 0,
+        settledAt: Date.now(),
+      });
+    }
+
+    // 9. 라운드 상태 업데이트
+    if (failedCount === 0) {
+      await registry.roundService.settleRound(roundId, {
+        totalWinners: winningBets.length,
+        totalLosers: losingBets.length,
+      });
+
+      const jobDuration = Date.now() - jobStartTime;
+      cronLogger.info('[Job 5] Completed', {
+        roundId,
+        settledCount,
+        losersProcessed: losingBets.length,
+        durationMs: jobDuration,
+      });
+
+      return createSuccessResponse({
+        round: { id: roundId, status: 'SETTLED' },
+        settledBets: settledCount + losingBets.length,
+        payoutsSent: settledCount,
+      });
+    } else {
+      // 일부 실패 → Recovery에서 재시도
+      await registry.roundService.incrementRetryCount(roundId);
+
+      const jobDuration = Date.now() - jobStartTime;
+      cronLogger.warn('[Job 5] Partially settled', {
+        roundId,
+        settledCount,
+        failedCount,
+        durationMs: jobDuration,
+      });
+
+      return createSuccessResponse({
+        round: { id: roundId, status: 'CALCULATING' },
+        settledBets: settledCount,
+        failedBets: failedCount,
+        message: 'Partially settled, will retry in Recovery',
+      });
+    }
+  } catch (error) {
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.error('[Job 5] Failed', {
+      durationMs: jobDuration,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    // 실패 시 알림 (Recovery에서 재시도 - 돈이 걸린 Job!)
+    await sendSlackAlert({
+      level: 'ERROR',
+      job: 'Settlement Processor',
+      message: '정산 실패 - Recovery에서 재시도 필요',
+      details: { error: error instanceof Error ? error.message : String(error) },
+    });
+
+    return handleApiError(error);
+  }
+}
+```
+
+### Service Layer 메서드
+
+```typescript
+// lib/rounds/round.service.ts
+
+/**
+ * 라운드 정산 완료 (CALCULATING → SETTLED)
+ */
+async settleRound(
+  roundId: string,
+  data: {
+    totalWinners: number;
+    totalLosers: number;
+  }
+): Promise<Round> {
+  return this.transitionStatus(roundId, 'SETTLED', {
+    ...data,
+    settlementCompletedAt: Date.now(),
+  });
+}
+
+/**
+ * 정산 재시도 카운트 증가
+ */
+async incrementRetryCount(roundId: string): Promise<number> {
+  const round = await this.findRoundById(roundId);
+  if (!round) throw new AppError('ROUND_NOT_FOUND', `Round not found: ${roundId}`);
+
+  const newCount = (round.settlementRetryCount || 0) + 1;
+
+  await this.db
+    .update(rounds)
+    .set({ settlementRetryCount: newCount, updatedAt: Date.now() })
+    .where(eq(rounds.id, roundId));
+
+  return newCount;
+}
+```
+
+```typescript
+// lib/bets/bet.service.ts
+
+/**
+ * 베팅 정산 상태 업데이트
+ */
+async updateBetSettlement(
+  betId: string,
+  data: {
+    settlementStatus: 'PENDING' | 'COMPLETED' | 'FAILED';
+    resultStatus?: 'WON' | 'LOST' | 'REFUNDED';
+    payoutAmount?: number;
+    settledAt?: number;
+  }
+): Promise<void> {
+  await this.db
+    .update(bets)
+    .set({
+      ...data,
+      updatedAt: Date.now(),
+    })
+    .where(eq(bets.id, betId));
+}
+```
+
+---
+
+## Job 6: Recovery & Monitoring
+
+### 목적
+
+**돈이 걸린 Job (Job 4, 5)의 실패를 복구**
+
+### 실행 시각
+
+**매분** (`* * * * *`)
+
+### 핵심 작업
+
+1. **CALCULATING 상태 10분+ 라운드 찾기** (Job 4, 5 실패)
+2. **Job 5 재호출** (정산 재시도)
+3. **3회 실패 → Slack CRITICAL 알림** (수동 개입 필요)
+
+### 설계 의사결정
+
+> **Q: 왜 Job 1, 2, 3 실패는 Recovery에서 안 잡나요?**
+>
+> A: 돈이 안 걸린 Job이기 때문입니다.
+>
+> - Job 1 실패 → 라운드 없음 → 다음 6시간 후 진행
+> - Job 2 실패 → SCHEDULED 유지 → 시간 지나면 CANCEL
+> - Job 3 실패 → API에서 막고 있음 → Job 4에서 처리
+>
+> Recovery는 **"이미 베팅이 들어온 라운드의 정산 실패"**만 복구합니다.
+
+> **Q: BETTING_LOCKED 상태가 오래 지속되면요?**
+>
+> A: Job 4가 실패한 것입니다.
+> Recovery에서 BETTING_LOCKED + endTime 지난 라운드도 찾아서 Job 4를 다시 호출할 수 있습니다.
+> (Week 2 구현 시 추가)
+
+### 구현
+
+```typescript
+import { NextRequest } from 'next/server';
+import { verifyCronAuth } from '@/lib/cron/auth';
+import { registry } from '@/lib/registry';
+import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
+import { cronLogger } from '@/lib/cron/logger';
+import { sendSlackAlert } from '@/lib/cron/slack';
+import { getRecoveryStuckThresholdMs } from '@/lib/config/cron';
+
+const MAX_RETRY_COUNT = 3;
 
 /**
  * POST /api/cron/recovery
  *
  * Job 6: Recovery & Monitoring
  *
- * 처리 내용:
- * 1. CALCULATING 상태 10분+ 라운드 찾기
- * 2. 미정산 베팅 재시도
- * 3. 3회 실패 시 Slack 알림
+ * 돈이 걸린 Job의 실패를 복구:
+ * 1. CALCULATING 상태가 10분+ 지속된 라운드 찾기
+ * 2. Job 5 재호출 (정산 재시도)
+ * 3. 3회 실패 → Slack CRITICAL 알림
  */
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
+  const jobStartTime = Date.now();
   cronLogger.info('[Job 6] Recovery started');
 
   try {
     // 1. 인증 검증
     const authResult = await verifyCronAuth(request);
     if (!authResult.success) {
+      cronLogger.warn('[Job 6] Auth failed');
       return authResult.response;
     }
 
-    // 2. 멈춰있는 라운드 찾기
-    const stuckRounds = await registry.roundService.findStuckRounds();
+    // 2. CALCULATING 상태가 오래 지속된 라운드 찾기
+    const stuckRounds = await registry.roundService.findStuckCalculatingRounds();
 
     if (stuckRounds.length === 0) {
       cronLogger.info('[Job 6] No stuck rounds found');
-      return createSuccessResponse({ message: 'No stuck rounds', recoveredRounds: [] });
+      return createSuccessResponse({ message: 'No stuck rounds' });
     }
 
-    cronLogger.warn(`[Job 6] Found ${stuckRounds.length} stuck rounds`);
+    cronLogger.warn('[Job 6] Found stuck rounds', {
+      count: stuckRounds.length,
+      roundIds: stuckRounds.map((r) => r.id),
+    });
 
     // 3. 각 라운드 복구 시도
-    const recoveredRounds = [];
-    const alertsSent = [];
+    const results: {
+      roundId: string;
+      action: 'retried' | 'alerted' | 'skipped';
+      retryCount?: number;
+    }[] = [];
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
     for (const round of stuckRounds) {
+      // 3-1. 재시도 횟수 확인
+      const retryCount = round.settlementRetryCount || 0;
+
+      if (retryCount >= MAX_RETRY_COUNT) {
+        // 3회 이상 실패 → Slack CRITICAL 알림
+        cronLogger.error('[Job 6] Max retries exceeded', {
+          roundId: round.id,
+          retryCount,
+        });
+
+        await sendSlackAlert({
+          level: 'CRITICAL',
+          job: 'Recovery',
+          message: `라운드 ${round.roundNumber} 정산 ${retryCount}회 실패, 수동 개입 필요`,
+          details: {
+            roundId: round.id,
+            roundNumber: round.roundNumber,
+            retryCount,
+            winner: round.winner,
+            totalPool: round.totalPool,
+          },
+        });
+
+        results.push({ roundId: round.id, action: 'alerted', retryCount });
+        continue;
+      }
+
+      // 3-2. Job 5 재호출
       try {
-        // 3-1. 미정산 베팅 찾기
-        const pendingBets = await registry.betService.findPendingBets(round.id);
+        cronLogger.info('[Job 6] Retrying settlement', {
+          roundId: round.id,
+          attempt: retryCount + 1,
+        });
 
-        cronLogger.info(`[Job 6] Round ${round.id}: ${pendingBets.length} pending bets`);
-
-        // 3-2. 재정산 시도
-        await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/cron/rounds/settle`, {
+        await fetch(`${baseUrl}/api/cron/rounds/settle`, {
           method: 'POST',
           headers: {
             'X-Cron-Secret': process.env.CRON_SECRET!,
@@ -1238,64 +1686,48 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({ roundId: round.id }),
         });
 
-        recoveredRounds.push({
-          roundId: round.id,
-          recoveredBets: pendingBets.length,
-          previousStatus: 'CALCULATING',
-        });
+        results.push({ roundId: round.id, action: 'retried', retryCount: retryCount + 1 });
       } catch (error) {
-        cronLogger.error(`[Job 6] Failed to recover round ${round.id}`, error);
+        cronLogger.error('[Job 6] Retry failed', {
+          roundId: round.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
 
-        // 재시도 카운트 증가
-        const retryCount = await registry.roundService.incrementRetryCount(round.id);
-
-        // 3회 실패 → Slack 알림
-        if (retryCount >= 3) {
-          await sendSlackAlert({
-            level: 'CRITICAL',
-            job: 'Recovery',
-            message: `Round ${round.id} 정산 3회 실패, 수동 개입 필요`,
-            details: {
-              roundId: round.id,
-              retryCount,
-              pendingBets: await registry.betService
-                .findPendingBets(round.id)
-                .then((b) => b.length),
-              error: error.message,
-            },
-          });
-
-          alertsSent.push({ roundId: round.id, reason: 'MAX_RETRIES_EXCEEDED' });
-        }
+        results.push({ roundId: round.id, action: 'skipped' });
       }
     }
 
-    const duration = Date.now() - startTime;
-    cronLogger.info(`[Job 6] Completed in ${duration}ms`, {
-      recoveredRounds: recoveredRounds.length,
-      alertsSent: alertsSent.length,
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.info('[Job 6] Completed', {
+      durationMs: jobDuration,
+      results,
     });
 
-    return createSuccessResponse({
-      recoveredRounds,
-      alertsSent: alertsSent.length,
-    });
+    return createSuccessResponse({ results });
   } catch (error) {
-    const duration = Date.now() - startTime;
-    cronLogger.error(`[Job 6] Failed after ${duration}ms`, error);
+    const jobDuration = Date.now() - jobStartTime;
+    cronLogger.error('[Job 6] Failed', {
+      durationMs: jobDuration,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     return handleApiError(error);
   }
 }
 ```
 
-### Service Layer
+### Service Layer 메서드
 
 ```typescript
+// lib/rounds/round.service.ts
+
 /**
- * CALCULATING 상태가 10분 이상 지속된 라운드 찾기
+ * CALCULATING 상태가 오래 지속된 라운드 찾기
+ *
+ * 기준: settlementStartedAt + 10분 < NOW
  */
-async findStuckRounds(): Promise<Round[]> {
-  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+async findStuckCalculatingRounds(): Promise<Round[]> {
+  const threshold = Date.now() - getRecoveryStuckThresholdMs();
 
   return this.db
     .select()
@@ -1303,42 +1735,20 @@ async findStuckRounds(): Promise<Round[]> {
     .where(
       and(
         eq(rounds.status, 'CALCULATING'),
-        lte(rounds.settlementStartedAt, tenMinutesAgo)
+        lt(rounds.settlementStartedAt, threshold)
       )
     )
     .orderBy(asc(rounds.settlementStartedAt));
 }
-
-/**
- * 미정산 베팅 찾기
- */
-async findPendingBets(roundId: string): Promise<Bet[]> {
-  return this.db
-    .select()
-    .from(bets)
-    .where(
-      and(
-        eq(bets.roundId, roundId),
-        inArray(bets.settlementStatus, ['PENDING', 'FAILED'])
-      )
-    );
-}
-
-/**
- * 재시도 카운트 증가
- */
-async incrementRetryCount(roundId: string): Promise<number> {
-  const round = await this.findRoundById(roundId);
-  const newCount = (round.settlementRetryCount || 0) + 1;
-
-  await this.db
-    .update(rounds)
-    .set({ settlementRetryCount: newCount })
-    .where(eq(rounds.id, roundId));
-
-  return newCount;
-}
 ```
+
+### 알림 정책
+
+| 상황                   | Level    | 메시지                                   |
+| ---------------------- | -------- | ---------------------------------------- |
+| 정산 1회 실패          | WARNING  | "라운드 N 정산 실패, 재시도 예정"        |
+| 정산 3회 실패          | CRITICAL | "라운드 N 정산 3회 실패, 수동 개입 필요" |
+| Recovery Job 자체 실패 | ERROR    | "Recovery Job 실패"                      |
 
 ---
 
@@ -1362,6 +1772,74 @@ async incrementRetryCount(roundId: string): Promise<number> {
 - **DELAYED 상태**: 도입 안 함. 상태 복잡도 증가 방지.
 - **Sui 필드 (Week 1)**: `suiPoolAddress`, `suiSettlementObjectId` 옵셔널 처리. Week 2에서 필수로 변경.
 - **설정 분리**: `lib/config/cron.ts` 생성. 환경변수 + constant 분리.
+
+### 2025-11-25 라운드 처리 방식 결정 (신규)
+
+#### 단일 라운드 처리
+
+**변경 전:**
+
+```typescript
+// 모든 SCHEDULED 라운드 처리
+const scheduledRounds = await findScheduledRounds();
+for (const round of scheduledRounds) { ... }
+```
+
+**변경 후:**
+
+```typescript
+// 가장 최근 1개만 처리
+const round = await findLatestScheduledRound();
+if (!round) return;
+```
+
+**이유:**
+
+- 정상 상황에서는 항상 1개만 해당
+- 비정상 라운드는 복구 대신 CANCEL 처리 (단순화)
+- 코드 복잡도 감소, 예측 가능한 동작
+
+#### 복구 전략 분리
+
+| Job                  | 돈 걸림? | 실패 시         | 이유                      |
+| -------------------- | -------- | --------------- | ------------------------- |
+| **Job 1** (Create)   | ❌       | 알림            | 라운드 없으면 다음 진행   |
+| **Job 2** (Open)     | ❌       | CANCEL + 알림   | lockTime 지나면 의미 없음 |
+| **Job 3** (Lock)     | ❌       | 무시            | API에서 막고 있음         |
+| **Job 4** (Finalize) | ✅       | Recovery 재시도 | 베팅 정산 필요            |
+| **Job 5** (Settle)   | ✅       | Recovery 재시도 | 배당 지급 필요            |
+
+**핵심 원칙:**
+
+- 돈 안 걸린 Job (1,2,3): **빠른 실패 + CANCEL + 다음 라운드**
+- 돈 걸린 Job (4,5): **Recovery에서 반드시 재시도**
+
+#### 시간 조건 검증 추가
+
+각 Job은 단순 status만이 아닌 **시간 조건도 검증**:
+
+```typescript
+// Job 2: startTime 지났지만 lockTime 안 지났을 때만 오픈
+if (round.startTime > now) return; // 아직 안 됨
+if (now >= round.lockTime) {
+  await cancelRound(round.id, 'MISSED_OPEN_WINDOW');
+  return;
+}
+```
+
+#### Service Layer 메서드 네이밍 통일
+
+| 기능                           | 메서드명                        |
+| ------------------------------ | ------------------------------- |
+| SCHEDULED 라운드 1개 찾기      | `findLatestScheduledRound()`    |
+| BETTING_OPEN 라운드 1개 찾기   | `findLatestOpenRound()`         |
+| BETTING_LOCKED 라운드 1개 찾기 | `findLatestLockedRound()`       |
+| CALCULATING 10분+ 라운드 찾기  | `findStuckCalculatingRounds()`  |
+| 라운드 오픈                    | `openRound(roundId, priceData)` |
+| 라운드 마감                    | `lockRound(roundId)`            |
+| 라운드 종료                    | `finalizeRound(roundId, data)`  |
+| 라운드 정산 완료               | `settleRound(roundId, data)`    |
+| 라운드 취소                    | `cancelRound(roundId, params)`  |
 
 ---
 
@@ -1955,16 +2433,28 @@ T+6시간: Job 4 (Finalize) + Job 2 (Open 다음 라운드)
 - [x] lib/config/cron.ts - 설정값 분리
 - [x] app/api/cron/scheduled/route.ts - Cron Handler (Job 4→Job 2 순차 실행)
 - [x] app/api/cron/rounds/create/route.ts - Job 1
-- [ ] app/api/cron/rounds/open/route.ts - Job 2 (현준 가격 API 연동 대기)
-- [ ] app/api/cron/rounds/lock/route.ts - Job 3
+- [ ] app/api/cron/rounds/open/route.ts - Job 2 (단일 라운드 처리, 시간 조건 검증)
+- [ ] app/api/cron/rounds/lock/route.ts - Job 3 (단일 라운드 처리)
+- [ ] lib/rounds/round.service.ts - 신규 메서드 추가:
+  - [ ] `findLatestScheduledRound()`
+  - [ ] `findLatestOpenRound()`
+  - [ ] `findLatestLockedRound()`
+  - [ ] `openRound()`
+  - [ ] `lockRound()`
+  - [ ] `cancelRound()`
 - [ ] curl로 수동 테스트
 
 **Week 2 (Sui 통합)**:
 
-- [ ] app/api/cron/rounds/finalize/route.ts - Job 4 (실제 가격)
-- [ ] app/api/cron/rounds/settle/route.ts - Job 5 (Sui 호출)
-- [ ] app/api/cron/recovery/route.ts - Job 6
+- [ ] app/api/cron/rounds/finalize/route.ts - Job 4 (단일 라운드 처리, Recovery 대상)
+- [ ] app/api/cron/rounds/settle/route.ts - Job 5 (멱등성 보장, Recovery 대상)
+- [ ] app/api/cron/recovery/route.ts - Job 6 (CALCULATING 복구)
 - [ ] lib/cron/slack.ts - Slack 알림
+- [ ] lib/rounds/round.service.ts - 신규 메서드 추가:
+  - [ ] `findStuckCalculatingRounds()`
+  - [ ] `finalizeRound()`
+  - [ ] `settleRound()`
+  - [ ] `incrementRetryCount()`
 - [ ] FSM 필수 필드 복원 (suiPoolAddress, suiSettlementObjectId)
 
 **Week 3 (배포)**:
@@ -1975,10 +2465,10 @@ T+6시간: Job 4 (Finalize) + Job 2 (Open 다음 라운드)
 
 ### 중요 포인트
 
-1. **멱등성**: 같은 Job을 여러 번 실행해도 안전
-2. **재시도**: 실패 시 자동 재시도 (최대 3회)
-3. **복구**: 서버 재시작 시 미완료 라운드 자동 복구
-4. **모니터링**: Slack 알림으로 Critical 에러 즉시 감지
-5. **테스트**: Postman으로 수동 테스트 → E2E 자동화
+1. **단일 라운드 처리**: 각 Job은 "가장 최근 1개"만 처리
+2. **시간 조건 검증**: status뿐만 아니라 시간도 확인
+3. **복구 전략 분리**: 돈 걸린 Job만 Recovery 대상
+4. **멱등성**: 같은 Job을 여러 번 실행해도 안전
+5. **모니터링**: Slack 알림으로 Critical 에러 즉시 감지
 
 ---
