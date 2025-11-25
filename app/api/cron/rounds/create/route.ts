@@ -16,14 +16,16 @@ import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
  */
 export async function POST(request: NextRequest) {
   const jobStartTime = Date.now();
-
-  const authResult = await verifyCronAuth(request);
-  if (!authResult.success) {
-    cronLogger.warn('[Job 1] Auth failed');
-    return authResult.response;
-  }
+  cronLogger.info('[Job 1] Started', { jobStartTime });
 
   try {
+    const authResult = await verifyCronAuth(request);
+    if (!authResult.success) {
+      cronLogger.warn('[Job 1] Auth failed');
+      return authResult.response;
+    }
+    cronLogger.info('[Job 1] Auth success');
+
     const round = await registry.roundService.createNextScheduledRound();
 
     const jobDuration = Date.now() - jobStartTime;
