@@ -585,8 +585,7 @@ if (now >= round.lockTime) {
 
 > **Q: PRICE_PENDING 상태가 필요한가요?**
 >
-> A: 단순화를 위해 BETTING_LOCKED → CALCULATING으로 직접 전이합니다.
-> PRICE_PENDING은 "가격 조회 중" 표시용이었는데, 실제로 수 초 내에 완료되므로 생략합니다.
+> A: 제거합니다. DB 초기화가 가능한 상태이므로 FSM을 단순화해 `BETTING_LOCKED → CALCULATING`으로 직접 전이합니다.
 
 ### 구현
 
@@ -611,9 +610,9 @@ import { transitionRoundStatus } from '@/lib/rounds/fsm';
  * 1. 가장 최근 BETTING_LOCKED 라운드 1개 찾기
  * 2. endTime <= NOW 확인
  * 3. End Price 스냅샷 가져오기
- * 4. 승자 판정 + 배당 계산
- * 5. 상태 전이 (BETTING_LOCKED → PRICE_PENDING → CALCULATING) - FSM 직접 사용
- * 6. Job 5 트리거
+ * 4. 승자 판정 + 배당 계산 (여기까지 성공해야 전이 시작)
+ * 5. 상태 전이 (BETTING_LOCKED → CALCULATING) - 단일 전이
+ * 6. Job 5 트리거 (내부 서비스 호출 권장)
  * 7. 실패 시 → Recovery에서 재시도 (돈이 걸린 Job!)
  */
 export async function POST(request: NextRequest) {
@@ -659,7 +658,7 @@ export async function POST(request: NextRequest) {
       source: prices.source,
     });
 
-    // 5. 승자 판정
+    // 5. 승자 판정 + 배당 계산 (전이 전에 끝내기)
     const winnerResult = determineWinner({
       goldStart: parseFloat(round.goldStartPrice!),
       goldEnd: prices.gold,
@@ -667,14 +666,6 @@ export async function POST(request: NextRequest) {
       btcEnd: prices.btc,
     });
 
-    cronLogger.info('[Job 4] Winner determined', {
-      roundId: round.id,
-      winner: winnerResult.winner,
-      goldChangePercent: winnerResult.goldChangePercent,
-      btcChangePercent: winnerResult.btcChangePercent,
-    });
-
-    // 6. 배당 계산
     const payoutResult = calculatePayout({
       winner: winnerResult.winner,
       totalPool: round.totalPool,
@@ -683,16 +674,9 @@ export async function POST(request: NextRequest) {
       platformFeeRate: getPlatformFeeRate(),
     });
 
-    // 7. 상태 전이 (BETTING_LOCKED → PRICE_PENDING → CALCULATING)
-    // FSM 규칙에 따라 2단계 전이 필요
-
-    // 7-1. BETTING_LOCKED → PRICE_PENDING
-    await transitionRoundStatus(round.id, 'PRICE_PENDING', {
+    // 6. 상태 전이 (BETTING_LOCKED → CALCULATING)
+    const calculatingRound = await transitionRoundStatus(round.id, 'CALCULATING', {
       roundEndedAt: Date.now(),
-    });
-
-    // 7-2. PRICE_PENDING → CALCULATING
-    await transitionRoundStatus(round.id, 'CALCULATING', {
       goldEndPrice: prices.gold.toString(),
       btcEndPrice: prices.btc.toString(),
       priceSnapshotEndAt: prices.timestamp,
@@ -702,16 +686,8 @@ export async function POST(request: NextRequest) {
       btcChangePercent: winnerResult.btcChangePercent.toString(),
     });
 
-    // 8. Job 5 트리거 (정산 처리)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    await fetch(`${baseUrl}/api/cron/rounds/settle`, {
-      method: 'POST',
-      headers: {
-        'X-Cron-Secret': process.env.CRON_SECRET!,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ roundId: round.id }),
-    });
+    // 7. Job 5 트리거 (정산 처리) - 내부 Service 호출 권장, HTTP fetch는 대안
+    await registry.roundService.settleRound(calculatingRound.id);
 
     const jobDuration = Date.now() - jobStartTime;
     cronLogger.info('[Job 4] Completed', {
@@ -728,6 +704,7 @@ export async function POST(request: NextRequest) {
         status: 'CALCULATING',
         winner: winnerResult.winner,
       },
+      payout: payoutResult,
     });
   } catch (error) {
     const jobDuration = Date.now() - jobStartTime;
@@ -763,7 +740,7 @@ async findLatestLockedRound(): Promise<Round | null> {
 ```
 
 > **참고**: 상태 전이는 Route에서 `transitionRoundStatus`를 직접 호출합니다.
-> FSM 규칙에 따라 BETTING_LOCKED → PRICE_PENDING → CALCULATING 2단계로 전이합니다.
+> FSM 단순화로 BETTING_LOCKED → CALCULATING 단일 전이를 사용합니다.
 
 ### 승자 판정 로직 (`lib/rounds/calculator.ts`)
 
@@ -860,6 +837,12 @@ export function calculatePayout(params: {
 ### 실행 방식
 
 **이벤트 기반** (Job 4가 트리거) + **Recovery에서 재시도**
+
+**트리거 방법**
+
+- 기본: Job 4에서 내부 Service 메서드(`roundService.settleRound`)를 직접 호출하여 즉시 정산 시작 (Cron secret/HTTP 의존 없음).
+- 대안: 동일한 경로(`/api/cron/rounds/settle`)를 `fetch`로 호출. 실패 시 에러를 던져 CALCULATING 상태로 남겨 Recovery가 재시도하도록 한다.
+- 라우트는 유지하되 얇게 만든다(인증/파싱 후 Service 호출만). Recovery나 수동 재시도 시 동일 경로를 재사용한다.
 
 ### 핵심 작업
 
@@ -1153,6 +1136,7 @@ async updateBetSettlement(
 1. **CALCULATING 상태 10분+ 라운드 찾기** (Job 4, 5 실패)
 2. **Job 5 재호출** (정산 재시도)
 3. **3회 실패 → Slack CRITICAL 알림** (수동 개입 필요)
+4. 필요 시 BETTING_LOCKED + endTime 지난 라운드를 Job 4 재호출로 확장 가능 (Job 4 실패 대비)
 
 ### 설계 의사결정
 
@@ -1427,16 +1411,16 @@ if (now >= round.lockTime) {
 | 라운드 취소 (FSM 래핑)         | `cancelRound(roundId, params)` |
 | 재시도 카운트 증가             | `incrementRetryCount(roundId)` |
 
-**FSM (상태 전이) - Route에서 직접 호출:**
+**FSM (상태 전이) - Route에서 직접 호출:**  
+PRICE_PENDING 제거 → 5단계 FSM. BETTING_LOCKED에서 CALCULATING으로 바로 전이한다.
 
-| 전이                           | 필수 metadata                                                                                                            |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| SCHEDULED → BETTING_OPEN       | `goldStartPrice`, `btcStartPrice`, `priceSnapshotStartAt`, `startPriceSource`, `bettingOpenedAt`                         |
-| BETTING_OPEN → BETTING_LOCKED  | `bettingLockedAt`                                                                                                        |
-| BETTING_LOCKED → PRICE_PENDING | `roundEndedAt`                                                                                                           |
-| PRICE_PENDING → CALCULATING    | `goldEndPrice`, `btcEndPrice`, `priceSnapshotEndAt`, `endPriceSource`, `goldChangePercent`, `btcChangePercent`, `winner` |
-| CALCULATING → SETTLED          | `platformFeeCollected`, `settlementCompletedAt`                                                                          |
-| \* → CANCELLED                 | (선택) `cancellationReason`, `cancellationMessage`, `cancelledBy`, `cancelledAt`                                         |
+| 전이                          | 필수 metadata                                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| SCHEDULED → BETTING_OPEN      | `goldStartPrice`, `btcStartPrice`, `priceSnapshotStartAt`, `startPriceSource`, `bettingOpenedAt`                                         |
+| BETTING_OPEN → BETTING_LOCKED | `bettingLockedAt`                                                                                                                        |
+| BETTING_LOCKED → CALCULATING  | `roundEndedAt`, `goldEndPrice`, `btcEndPrice`, `priceSnapshotEndAt`, `endPriceSource`, `goldChangePercent`, `btcChangePercent`, `winner` |
+| CALCULATING → SETTLED         | `platformFeeCollected`, `settlementCompletedAt`                                                                                          |
+| \* → CANCELLED                | (선택) `cancellationReason`, `cancellationMessage`, `cancelledBy`, `cancelledAt`                                                         |
 
 ---
 
@@ -1606,6 +1590,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 ```
+
+### 에러 클래스/코드 표준 (Service → Route 매핑)
+
+- Service는 `lib/shared/errors.ts` 클래스만 던진다. Route(Controller)에서 `handleApiError`로 HTTP 응답 변환 + Slack 알림을 맡는다. Service는 HTTP 유틸을 import하지 않는다.
+- 권장 코드
+  - 시간 조건 불충족: `BusinessRuleError('ROUND_NOT_READY', ...)`
+  - 필수 데이터 없음: `BusinessRuleError('ROUND_DATA_MISSING', { missing })`
+  - 상태 전이 불가: `BusinessRuleError('INVALID_TRANSITION', ...)` (FSM)
+  - 가격 조회 실패: `ServiceError('PRICE_FETCH_FAILED', { cause })`
+  - Job 5 트리거 실패: `ServiceError('SETTLEMENT_TRIGGER_FAILED', { cause })`
+  - 알 수 없는 예외: `ServiceError('INTERNAL_ERROR', { cause })`
+- 실패 시 **상태를 미리 바꾸지 않는다**. 계산 전 실패 → BETTING_LOCKED 유지, 전이 후 실패 → CALCULATING에 머물러 Recovery 대상이 되도록 한다.
 
 ---
 
