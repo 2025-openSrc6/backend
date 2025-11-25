@@ -15,12 +15,8 @@ describe('FSM Unit Tests', () => {
         expect(canTransition('BETTING_OPEN', 'BETTING_LOCKED')).toBe(true);
       });
 
-      it('BETTING_LOCKED → PRICE_PENDING을 허용한다', () => {
-        expect(canTransition('BETTING_LOCKED', 'PRICE_PENDING')).toBe(true);
-      });
-
-      it('PRICE_PENDING → CALCULATING을 허용한다', () => {
-        expect(canTransition('PRICE_PENDING', 'CALCULATING')).toBe(true);
+      it('BETTING_LOCKED → CALCULATING을 허용한다', () => {
+        expect(canTransition('BETTING_LOCKED', 'CALCULATING')).toBe(true);
       });
 
       it('CALCULATING → SETTLED를 허용한다', () => {
@@ -45,10 +41,6 @@ describe('FSM Unit Tests', () => {
         expect(canTransition('BETTING_LOCKED', 'CANCELLED')).toBe(true);
       });
 
-      it('PRICE_PENDING → CANCELLED를 허용한다', () => {
-        expect(canTransition('PRICE_PENDING', 'CANCELLED')).toBe(true);
-      });
-
       it('CALCULATING → CANCELLED를 허용한다', () => {
         expect(canTransition('CALCULATING', 'CANCELLED')).toBe(true);
       });
@@ -63,12 +55,8 @@ describe('FSM Unit Tests', () => {
         expect(canTransition('BETTING_LOCKED', 'BETTING_OPEN')).toBe(false);
       });
 
-      it('PRICE_PENDING → BETTING_LOCKED를 거부한다', () => {
-        expect(canTransition('PRICE_PENDING', 'BETTING_LOCKED')).toBe(false);
-      });
-
-      it('CALCULATING → PRICE_PENDING을 거부한다', () => {
-        expect(canTransition('CALCULATING', 'PRICE_PENDING')).toBe(false);
+      it('CALCULATING → BETTING_LOCKED을 거부한다', () => {
+        expect(canTransition('CALCULATING', 'BETTING_LOCKED')).toBe(false);
       });
 
       it('SETTLED → CALCULATING을 거부한다', () => {
@@ -85,10 +73,6 @@ describe('FSM Unit Tests', () => {
         expect(canTransition('SCHEDULED', 'CALCULATING')).toBe(false);
       });
 
-      it('BETTING_OPEN → PRICE_PENDING을 거부한다', () => {
-        expect(canTransition('BETTING_OPEN', 'PRICE_PENDING')).toBe(false);
-      });
-
       it('BETTING_OPEN → SETTLED를 거부한다', () => {
         expect(canTransition('BETTING_OPEN', 'SETTLED')).toBe(false);
       });
@@ -100,7 +84,6 @@ describe('FSM Unit Tests', () => {
           'SCHEDULED',
           'BETTING_OPEN',
           'BETTING_LOCKED',
-          'PRICE_PENDING',
           'CALCULATING',
           'SETTLED',
           'CANCELLED',
@@ -117,7 +100,6 @@ describe('FSM Unit Tests', () => {
           'SCHEDULED',
           'BETTING_OPEN',
           'BETTING_LOCKED',
-          'PRICE_PENDING',
           'CALCULATING',
           'SETTLED',
           'CANCELLED',
@@ -134,7 +116,6 @@ describe('FSM Unit Tests', () => {
           'SCHEDULED',
           'BETTING_OPEN',
           'BETTING_LOCKED',
-          'PRICE_PENDING',
           'CALCULATING',
           'SETTLED',
           'CANCELLED',
@@ -153,7 +134,6 @@ describe('FSM Unit Tests', () => {
           'SCHEDULED',
           'BETTING_OPEN',
           'BETTING_LOCKED',
-          'PRICE_PENDING',
           'CALCULATING',
           'SETTLED',
           'CANCELLED',
@@ -331,6 +311,24 @@ describe('FSM Unit Tests', () => {
           ValidationError,
         );
       });
+
+      it('BETTING_LOCKED → CALCULATING 전이 시 필수 필드가 없으면 ValidationError를 던진다', async () => {
+        const lockedRound = { ...mockRound, status: 'BETTING_LOCKED' };
+
+        const mockService = {
+          getRoundById: vi.fn().mockResolvedValue(lockedRound),
+          updateRoundById: vi.fn(),
+        };
+
+        registry.setRoundService(mockService as unknown as typeof registry.roundService);
+
+        await expect(
+          transitionRoundStatus(mockRound.id, 'CALCULATING', {
+            goldEndPrice: '10',
+            // roundEndedAt, btcEndPrice 등 누락
+          }),
+        ).rejects.toThrow(ValidationError);
+      });
     });
 
     describe('성공적인 전이', () => {
@@ -394,6 +392,44 @@ describe('FSM Unit Tests', () => {
         expect(mockService.updateRoundById).toHaveBeenCalledTimes(1);
       });
 
+      it('BETTING_LOCKED → CALCULATING 전이가 성공한다', async () => {
+        const lockedRound = { ...mockRound, status: 'BETTING_LOCKED' };
+
+        const metadata = {
+          roundEndedAt: Date.now(),
+          goldEndPrice: '10',
+          btcEndPrice: '1',
+          priceSnapshotEndAt: Date.now(),
+          endPriceSource: 'mock',
+          goldChangePercent: '1.1',
+          btcChangePercent: '0.9',
+          winner: 'GOLD',
+        };
+
+        const updatedRound = {
+          ...lockedRound,
+          status: 'CALCULATING',
+          ...metadata,
+        };
+
+        const mockService = {
+          getRoundById: vi.fn().mockResolvedValue(lockedRound),
+          updateRoundById: vi.fn().mockResolvedValue(updatedRound),
+        };
+
+        registry.setRoundService(mockService as unknown as typeof registry.roundService);
+
+        const result = await transitionRoundStatus(mockRound.id, 'CALCULATING', metadata);
+
+        expect(mockService.getRoundById).toHaveBeenCalledWith(mockRound.id);
+        expect(mockService.updateRoundById).toHaveBeenCalledWith(mockRound.id, {
+          status: 'CALCULATING',
+          ...metadata,
+          updatedAt: expect.any(Number),
+        });
+        expect(result).toEqual(updatedRound);
+      });
+
       it('ANY → CANCELLED 전이가 성공한다 (필수 필드 없음)', async () => {
         const updatedRound = {
           ...mockRound,
@@ -414,7 +450,7 @@ describe('FSM Unit Tests', () => {
     });
 
     describe('전체 라이프사이클 테스트', () => {
-      it('SCHEDULED → BETTING_OPEN → BETTING_LOCKED → PRICE_PENDING → CALCULATING → SETTLED 전체 플로우를 완료한다', async () => {
+      it('SCHEDULED → BETTING_OPEN → BETTING_LOCKED → CALCULATING → SETTLED 전체 플로우를 완료한다', async () => {
         let currentRound = { ...mockRound };
 
         const mockService = {
@@ -444,14 +480,9 @@ describe('FSM Unit Tests', () => {
         });
         expect(currentRound.status).toBe('BETTING_LOCKED');
 
-        // 3. BETTING_LOCKED → PRICE_PENDING
-        await transitionRoundStatus(mockRound.id, 'PRICE_PENDING', {
-          roundEndedAt: Date.now(),
-        });
-        expect(currentRound.status).toBe('PRICE_PENDING');
-
-        // 4. PRICE_PENDING → CALCULATING
+        // 3. BETTING_LOCKED → CALCULATING
         await transitionRoundStatus(mockRound.id, 'CALCULATING', {
+          roundEndedAt: Date.now(),
           goldEndPrice: '2655.00',
           btcEndPrice: '98500.00',
           priceSnapshotEndAt: Date.now(),
