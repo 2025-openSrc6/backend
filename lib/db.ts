@@ -2,7 +2,6 @@ import { initializeDb } from '@/db/client';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { cache } from 'react';
 import type { D1Database } from '@cloudflare/workers-types';
-import * as schema from '@/db/schema';
 
 export type RemoteDrizzleClient = ReturnType<typeof initializeDb>;
 export type DbClient = RemoteDrizzleClient;
@@ -31,29 +30,14 @@ interface CloudflareEnv {
  */
 export const getDb = cache((): DbClient => {
   const remoteDb = getCloudflareDrizzle();
-  if (remoteDb) {
-    return remoteDb;
+  if (!remoteDb) {
+    const hint =
+      process.env.NODE_ENV === 'development'
+        ? 'Ensure initOpenNextCloudflareForDev() is called in next.config.ts'
+        : 'Check Cloudflare D1 binding configuration in wrangler.toml';
+    throw new Error(`D1 database binding 'DB' is not available. ${hint}`);
   }
-
-  // Fallback to local SQLite if no Cloudflare context (Local Dev)
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      console.warn('⚠️  Using local SQLite fallback (delta.db)');
-      const Database = require('better-sqlite3');
-      const { drizzle } = require('drizzle-orm/better-sqlite3');
-
-      const sqlite = new Database('delta.db');
-      return drizzle(sqlite, { schema });
-    } catch (error) {
-      console.error('Failed to initialize local SQLite:', error);
-    }
-  }
-
-  const hint =
-    process.env.NODE_ENV === 'development'
-      ? 'Ensure initOpenNextCloudflareForDev() is called in next.config.ts'
-      : 'Check Cloudflare D1 binding configuration in wrangler.toml';
-  throw new Error(`D1 database binding 'DB' is not available. ${hint}`);
+  return remoteDb;
 });
 
 function getCloudflareDrizzle(): RemoteDrizzleClient | null {
