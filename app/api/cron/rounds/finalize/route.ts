@@ -10,40 +10,43 @@ import { NextRequest } from 'next/server';
  *
  * Job 4: Round Finalizer
  *
- * 단순 로직:
- * 1. 가장 최근 BETTING_LOCKED 라운드 1개 찾기
- * 2. endTime <= NOW 확인
- * 3. End Price 스냅샷 가져오기
- * 4. 승자 판정 + 배당 계산
- * 5. 상태 전이 (BETTING_LOCKED → CALCULATING) - FSM 직접 사용
- * 6. Job 5 트리거
- * 7. 실패 시 → Recovery에서 재시도 (돈이 걸린 Job!)
+ * 얇은 래퍼 - 실제 로직은 RoundService.finalizeRound()에서 처리
+ *
+ * 책임:
+ * 1. 가격 데이터 가져오기 (현준님 API 또는 Mock)
+ * 2. Service 호출 (승자 판정, 배당 계산, 정산 모두 처리됨)
+ * 3. 결과 반환
+ *
+ * Note: Job 5 (정산)는 finalizeRound 내부에서 자동 호출됨
  */
 export async function POST(request: NextRequest) {
   const jobStartTime = Date.now();
   cronLogger.info('[Job 4] Round Finalizer started');
 
   try {
-    // 인증 검증
+    // 1. 인증 검증
     const authResult = await verifyCronAuth(request);
     if (!authResult.success) {
       cronLogger.warn('[Job 4] Auth failed');
       return authResult.response;
     }
 
+    // 2. End Price 스냅샷 가져오기
+    // TODO: 현준님 API 연동 (getPrices() 호출)
     const endPriceData: PriceData = {
-      gold: 10,
-      btc: 1,
+      gold: 2680.5, // Mock data - 실제로는 getPrices()
+      btc: 99234.0,
       timestamp: Date.now(),
       source: 'mock',
     };
-    cronLogger.info('[Job 4] End price data fetched (mock)', {
+
+    cronLogger.info('[Job 4] End price data fetched', {
       gold: endPriceData.gold,
       btc: endPriceData.btc,
-      timestamp: new Date(endPriceData.timestamp).toISOString(),
       source: endPriceData.source,
     });
 
+    // 3. Service 호출 (승자 판정 + 배당 계산 + 정산)
     const result = await registry.roundService.finalizeRound(endPriceData);
 
     const jobDuration = Date.now() - jobStartTime;
@@ -54,13 +57,26 @@ export async function POST(request: NextRequest) {
       durationMs: jobDuration,
     });
 
-    return createSuccessResponse(result);
+    return createSuccessResponse({
+      status: result.status,
+      round: result.round
+        ? {
+            id: result.round.id,
+            roundNumber: result.round.roundNumber,
+            status: result.round.status,
+            winner: result.round.winner,
+          }
+        : undefined,
+      message: result.message,
+    });
   } catch (error) {
     const jobDuration = Date.now() - jobStartTime;
     cronLogger.error('[Job 4] Failed', {
       durationMs: jobDuration,
       error: error instanceof Error ? error.message : String(error),
     });
+
+    // TODO: Slack 알림 (CRITICAL - 돈이 걸린 Job)
     return handleApiError(error);
   }
 }

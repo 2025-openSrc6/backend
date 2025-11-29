@@ -257,3 +257,20 @@ export interface FinalizeRoundResult {
   round?: Round;
   message?: string;
 }
+
+/**
+ * settleRound 결과 상태
+ */
+export type SettleRoundStatus = 'settled' | 'already_settled' | 'no_bets' | 'partial' | 'failed';
+
+/**
+ * Service.settleRound() 반환 타입
+ */
+export interface SettleRoundResult {
+  status: SettleRoundStatus;
+  roundId: string;
+  settledCount?: number;
+  failedCount?: number;
+  totalPayout?: number;
+  message?: string;
+}
