@@ -16,6 +16,7 @@ import { ROUND_START_HOURS_UTC } from '@/lib/config/cron';
  * - 매시 1분 (17, 23, 5, 11): Job 3 (Betting Locker)
  * - 매분: Job 6 (Recovery)
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
