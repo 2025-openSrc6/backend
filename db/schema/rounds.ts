@@ -100,6 +100,9 @@ export const rounds = sqliteTable(
       .notNull()
       .default(0),
 
+    /** 정산용 풀 (totalPool - platformFeeCollected) */
+    payoutPool: integer('payout_pool', { mode: 'number' }).notNull().default(0),
+
     /** Sui 상의 BettingPool Object ID */
     suiPoolAddress: text('sui_pool_address', { length: 100 }),
 
