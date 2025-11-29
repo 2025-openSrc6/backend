@@ -1076,48 +1076,67 @@ export async function POST(request: NextRequest) {
 
 ### Service Layer 메서드
 
-> **참고**: 상태 전이는 Route에서 `transitionRoundStatus`를 직접 호출합니다.
+**실제 구현 (2025-11-28 업데이트):**
+
+Job 4에서 `roundService.settleRound(roundId)`를 내부 호출하여 정산 처리.
 
 ```typescript
 // lib/rounds/service.ts
 
 /**
- * 정산 재시도 카운트 증가
+ * 라운드 정산 (Job 5)
+ *
+ * Job 4에서 내부 호출됨. Route는 얇게 유지.
  */
-async incrementRetryCount(roundId: string): Promise<number> {
-  const round = await this.getRoundById(roundId);
-  const newCount = (round.settlementRetryCount || 0) + 1;
-
-  await this.repository.updateById(roundId, {
-    settlementRetryCount: newCount,
-    updatedAt: Date.now(),
-  });
-
-  return newCount;
+async settleRound(roundId: string): Promise<SettleRoundResult> {
+  // 1. 라운드 조회 + 멱등성 체크 (이미 SETTLED면 성공 리턴)
+  // 2. 베팅 조회 (BetService 사용)
+  // 3. platformFee 및 payoutPool 계산
+  // 4. 승자/패자 분류
+  // 5. 각 베팅 정산 (updateBetSettlement)
+  // 6. SETTLED 전이 + payoutPool 저장
+  // 7. 결과 반환
 }
 ```
 
 ```typescript
-// lib/bets/bet.service.ts
+// lib/bets/service.ts
 
 /**
- * 베팅 정산 상태 업데이트
+ * 베팅 정산 결과 업데이트 (Job 5 전용)
+ *
+ * settledAt은 자동으로 현재 시각으로 설정됨
  */
 async updateBetSettlement(
   betId: string,
-  data: {
-    settlementStatus: 'PENDING' | 'COMPLETED' | 'FAILED';
-    resultStatus?: 'WON' | 'LOST' | 'REFUNDED';
-    payoutAmount?: number;
-    settledAt?: number;
+  result: {
+    resultStatus: 'WON' | 'LOST' | 'REFUNDED';
+    settlementStatus: 'COMPLETED' | 'FAILED';
+    payoutAmount: number;
   }
-): Promise<void> {
-  await this.repository.updateById(betId, {
-    ...data,
-    updatedAt: Date.now(),
+): Promise<Bet> {
+  return this.betRepository.updateById(betId, {
+    resultStatus: result.resultStatus,
+    settlementStatus: result.settlementStatus,
+    payoutAmount: result.payoutAmount,
+    settledAt: Date.now(),
   });
 }
+
+/**
+ * 라운드의 모든 베팅 조회 (정산용)
+ */
+async findBetsByRoundId(roundId: string): Promise<Bet[]> {
+  return this.betRepository.findByRoundId(roundId);
+}
 ```
+
+**주요 변경사항:**
+
+- `payoutPool`이 스키마에 추가되어 DB에 저장됨
+- `BetService.updateBetSettlement()`가 정산 전용 메서드로 분리됨
+- `RoundService`가 `BetService`를 DI로 주입받아 사용
+- Job 4에서 Job 5를 내부 호출 (HTTP 호출 대신)
 
 ---
 
@@ -2039,16 +2058,24 @@ T+6시간: Job 4 (Finalize) + Job 2 (Open 다음 라운드)
 
 **Week 2 (Sui 통합)**:
 
+- [x] db/schema/rounds.ts - `payoutPool` 컬럼 추가
+- [x] lib/bets/service.ts - 정산 메서드 추가:
+  - [x] `updateBetSettlement()` (정산 전용)
+  - [x] `findBetsByRoundId()` (정산용 조회)
+- [x] lib/bets/repository.ts - `findByRoundId()` 추가
+- [x] lib/rounds/service.ts - 정산 로직 완성:
+  - [x] `settleRound()` (멱등성 보장)
+  - [x] `finalizeRound()` (승자 판정 + 배당 계산)
+  - [x] `BetService` DI 주입
 - [ ] app/api/cron/rounds/finalize/route.ts - Job 4 (단일 라운드 처리, Recovery 대상)
-- [ ] app/api/cron/rounds/settle/route.ts - Job 5 (멱등성 보장, Recovery 대상)
+- [ ] app/api/cron/rounds/settle/route.ts - Job 5 (얇은 래퍼, Service 호출)
 - [ ] app/api/cron/recovery/route.ts - Job 6 (CALCULATING 복구)
 - [ ] lib/cron/slack.ts - Slack 알림
-- [ ] lib/rounds/round.service.ts - 신규 메서드 추가:
+- [ ] lib/rounds/round.service.ts - 복구 메서드:
   - [ ] `findStuckCalculatingRounds()`
-  - [ ] `finalizeRound()`
-  - [ ] `settleRound()`
   - [ ] `incrementRetryCount()`
 - [ ] FSM 필수 필드 복원 (suiPoolAddress, suiSettlementObjectId)
+- [ ] DB 마이그레이션 실행 (`payoutPool` 컬럼 적용)
 
 **Week 3 (배포)**:
 
