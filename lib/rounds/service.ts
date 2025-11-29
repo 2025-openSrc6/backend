@@ -14,6 +14,7 @@
  */
 
 import { RoundRepository } from './repository';
+import { BetService } from '@/lib/bets/service';
 import { createRoundSchema, getCurrentRoundQuerySchema, getRoundsQuerySchema } from './validation';
 import {
   ValidationError,
@@ -35,6 +36,7 @@ import type {
   FinalizeRoundResult,
   CalculatePayoutResult,
   DetermineWinnerResult,
+  SettleRoundResult,
 } from './types';
 import { BETTING_DURATIONS_MS, ROUND_DURATIONS_MS } from './constants';
 import { transitionRoundStatus } from './fsm';
@@ -43,10 +45,12 @@ import { calculatePayout, determineWinner } from './calculator';
 
 export class RoundService {
   private repository: RoundRepository;
+  private betService: BetService;
 
-  constructor(repository?: RoundRepository) {
-    // Dependency Injection: 테스트 시 Mock Repository 주입 가능
+  constructor(repository?: RoundRepository, betService?: BetService) {
+    // Dependency Injection: 테스트 시 Mock 주입 가능
     this.repository = repository ?? new RoundRepository();
+    this.betService = betService ?? new BetService();
   }
 
   /**
@@ -625,11 +629,182 @@ export class RoundService {
     }
   }
 
-  async settleRound(roundId: string): Promise<void> {
-    cronLogger.warn('[Job 5] Settlement not implemented yet', { roundId });
-    throw new ServiceError('SETTLEMENT_NOT_IMPLEMENTED', 'Settlement service not implemented', {
-      roundId,
-    });
+  async settleRound(roundId: string): Promise<SettleRoundResult> {
+    const jobStartTime = Date.now();
+    cronLogger.info('[Job 5] Starting settlement', { roundId });
+
+    try {
+      // 1. 라운드 조회
+      const round = await this.repository.findById(roundId);
+      if (!round) {
+        throw new NotFoundError('Round', roundId);
+      }
+
+      // 2. 멱등성: 이미 SETTLED면 성공으로 처리
+      if (round.status === 'SETTLED') {
+        cronLogger.info('[Job 5] Round already settled', { roundId });
+        return { status: 'already_settled', roundId };
+      }
+
+      // 3. 상태 검증
+      if (round.status !== 'CALCULATING') {
+        throw new BusinessRuleError(
+          'INVALID_ROUND_STATUS',
+          `Round must be in CALCULATING status, got: ${round.status}`,
+          { roundId, currentStatus: round.status },
+        );
+      }
+
+      // 4. 베팅 조회
+      const allBets = await this.betService.findBetsByRoundId(roundId);
+
+      // 5. 베팅 없으면 바로 SETTLED 전이
+      if (allBets.length === 0) {
+        cronLogger.info('[Job 5] No bets to settle', { roundId });
+
+        await transitionRoundStatus(roundId, 'SETTLED', {
+          platformFeeCollected: 0,
+          settlementCompletedAt: Date.now(),
+        });
+
+        return { status: 'no_bets', roundId, settledCount: 0 };
+      }
+
+      // 6. 수수료 및 payoutPool 계산
+      const platformFee = Math.floor(round.totalPool * parseFloat(round.platformFeeRate));
+      const payoutPool = round.totalPool - platformFee;
+
+      cronLogger.info('[Job 5] Payout calculated', {
+        roundId,
+        totalPool: round.totalPool,
+        platformFee,
+        payoutPool,
+      });
+
+      // 7. 승자/패자 분류
+      const winningBets = allBets.filter((bet) => bet.prediction === round.winner);
+      const losingBets = allBets.filter((bet) => bet.prediction !== round.winner);
+      const winningPool = round.winner === 'GOLD' ? round.totalGoldBets : round.totalBtcBets;
+
+      cronLogger.info('[Job 5] Bets classified', {
+        roundId,
+        winners: winningBets.length,
+        losers: losingBets.length,
+        winningPool,
+      });
+
+      // 8. 승자 정산
+      let settledCount = 0;
+      let failedCount = 0;
+      let totalPayout = 0;
+
+      for (const bet of winningBets) {
+        try {
+          // 멱등성: 이미 정산된 베팅 스킵
+          if (bet.settlementStatus === 'COMPLETED') {
+            settledCount++;
+            continue;
+          }
+
+          // 배당 계산
+          const userShare = bet.amount / winningPool;
+          const payout = Math.floor(userShare * payoutPool);
+
+          // DB 업데이트
+          await this.betService.updateBetSettlement(bet.id, {
+            resultStatus: 'WON',
+            settlementStatus: 'COMPLETED',
+            payoutAmount: payout,
+          });
+
+          settledCount++;
+          totalPayout += payout;
+        } catch (error) {
+          cronLogger.error('[Job 5] Failed to settle winning bet', {
+            betId: bet.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          failedCount++;
+        }
+      }
+
+      // 9. 패자 처리
+      for (const bet of losingBets) {
+        try {
+          // 멱등성: 이미 처리된 베팅 스킵
+          if (bet.settlementStatus === 'COMPLETED') {
+            continue;
+          }
+
+          await this.betService.updateBetSettlement(bet.id, {
+            resultStatus: 'LOST',
+            settlementStatus: 'COMPLETED',
+            payoutAmount: 0,
+          });
+        } catch (error) {
+          cronLogger.error('[Job 5] Failed to update losing bet', {
+            betId: bet.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          // 패자 처리 실패는 카운트하지 않음 (돈이 안 걸려있음)
+        }
+      }
+
+      // 10. 라운드 상태 업데이트
+      if (failedCount === 0) {
+        // 정산 완료
+        await transitionRoundStatus(roundId, 'SETTLED', {
+          platformFeeCollected: platformFee,
+          settlementCompletedAt: Date.now(),
+        });
+
+        // payoutPool도 저장
+        await this.repository.updateById(roundId, { payoutPool });
+
+        const jobDuration = Date.now() - jobStartTime;
+        cronLogger.info('[Job 5] Completed', {
+          roundId,
+          settledCount,
+          totalPayout,
+          durationMs: jobDuration,
+        });
+
+        return {
+          status: 'settled',
+          roundId,
+          settledCount: settledCount + losingBets.length,
+          totalPayout,
+        };
+      } else {
+        // 부분 실패 → Recovery에서 재시도
+        const jobDuration = Date.now() - jobStartTime;
+        cronLogger.warn('[Job 5] Partially settled', {
+          roundId,
+          settledCount,
+          failedCount,
+          durationMs: jobDuration,
+        });
+
+        return {
+          status: 'partial',
+          roundId,
+          settledCount,
+          failedCount,
+          message: 'Partially settled, will retry in Recovery',
+        };
+      }
+    } catch (error) {
+      const jobDuration = Date.now() - jobStartTime;
+      cronLogger.error('[Job 5] Failed to settle round', {
+        roundId,
+        durationMs: jobDuration,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      // TODO: Slack 알림
+
+      throw error;
+    }
   }
 
   /**

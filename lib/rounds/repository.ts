@@ -16,8 +16,14 @@ import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
-import type { Round, RoundInsert, RoundQueryParams, RoundStatus, RoundType } from './types';
-import { NotFoundError } from '../shared/errors';
+import type {
+  Round,
+  RoundInsert,
+  RoundQueryParams,
+  RoundStatus,
+  RoundType,
+} from '@/lib/rounds/types';
+import { NotFoundError } from '@/lib/shared/errors';
 
 export class RoundRepository {
   /**

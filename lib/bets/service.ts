@@ -24,6 +24,7 @@ import type {
   CreateBetInput,
   BetWithRound,
 } from './types';
+import { Bet } from '@/db/schema';
 
 export class BetService {
   private betRepository: BetRepository;
@@ -210,5 +211,51 @@ export class BetService {
         endTime: round.endTime,
       },
     };
+  }
+
+  /**
+   * 베팅 업데이트 (일반)
+   *
+   * @param id - 베팅 UUID
+   * @param updateData - 업데이트 데이터
+   * @returns 업데이트된 베팅
+   */
+  async updateBet(id: string, updateData: Partial<Bet>): Promise<Bet> {
+    return await this.betRepository.updateById(id, updateData);
+  }
+
+  /**
+   * 베팅 정산 결과 업데이트 (Job 5 전용)
+   *
+   * 멱등성 보장: 이미 COMPLETED인 베팅은 스킵하도록 호출자가 처리
+   *
+   * @param betId - 베팅 UUID
+   * @param result - 정산 결과
+   * @returns 업데이트된 베팅
+   */
+  async updateBetSettlement(
+    betId: string,
+    result: {
+      resultStatus: 'WON' | 'LOST' | 'REFUNDED';
+      settlementStatus: 'COMPLETED' | 'FAILED';
+      payoutAmount: number;
+    },
+  ): Promise<Bet> {
+    return this.betRepository.updateById(betId, {
+      resultStatus: result.resultStatus,
+      settlementStatus: result.settlementStatus,
+      payoutAmount: result.payoutAmount,
+      settledAt: Date.now(),
+    });
+  }
+
+  /**
+   * 라운드의 모든 베팅 조회 (정산용)
+   *
+   * @param roundId - 라운드 UUID
+   * @returns 베팅 배열
+   */
+  async findBetsByRoundId(roundId: string): Promise<Bet[]> {
+    return this.betRepository.findByRoundId(roundId);
   }
 }

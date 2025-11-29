@@ -19,6 +19,7 @@ import type { SQL } from 'drizzle-orm';
 import type { Bet } from '@/db/schema/bets';
 import type { Round } from '@/db/schema/rounds';
 import type { BetQueryParams, CreateBetInput } from './types';
+import { NotFoundError } from '@/lib/shared/errors';
 
 export class BetRepository {
   /**
@@ -181,6 +182,39 @@ export class BetRepository {
       this.handleError(error);
       throw error; // Should be unreachable due to handleError throwing
     }
+  }
+
+  /**
+   * 라운드의 모든 베팅 조회 (정산용)
+   *
+   * @param roundId - 라운드 UUID
+   * @returns 베팅 배열 (생성일순 정렬)
+   */
+  async findByRoundId(roundId: string): Promise<Bet[]> {
+    const db = getDb();
+    const result = await db
+      .select()
+      .from(bets)
+      .where(eq(bets.roundId, roundId))
+      .orderBy(asc(bets.createdAt));
+
+    return result;
+  }
+
+  /**
+   * ID로 베팅 업데이트
+   *
+   * @param id - 베팅 UUID
+   * @param updateData - 업데이터 데이터 (Partial<Bet>)
+   * @returns 업데이트된 베팅
+   */
+  async updateById(id: string, updateData: Partial<Bet>): Promise<Bet> {
+    const db = getDb();
+    const result = await db.update(bets).set(updateData).where(eq(bets.id, id)).returning();
+    if (!result || result.length === 0) {
+      throw new NotFoundError('Bet', id);
+    }
+    return result[0];
   }
 
   private handleError(error: unknown) {
