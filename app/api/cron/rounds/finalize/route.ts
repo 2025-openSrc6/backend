@@ -2,7 +2,7 @@ import { verifyCronAuth } from '@/lib/cron/auth';
 import { cronLogger } from '@/lib/cron/logger';
 import { registry } from '@/lib/registry';
 import { PriceData } from '@/lib/rounds/types';
-import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
+import { createErrorResponse, createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { NextRequest } from 'next/server';
 
 /**
@@ -57,18 +57,48 @@ export async function POST(request: NextRequest) {
       durationMs: jobDuration,
     });
 
-    return createSuccessResponse({
-      status: result.status,
-      round: result.round
-        ? {
-            id: result.round.id,
-            roundNumber: result.round.roundNumber,
-            status: result.round.status,
-            winner: result.round.winner,
-          }
-        : undefined,
-      message: result.message,
-    });
+    switch (result.status) {
+      case 'finalized':
+        return createSuccessResponse({
+          status: result.status,
+          round: result.round
+            ? {
+                id: result.round.id,
+                roundNumber: result.round.roundNumber,
+                status: result.round.status,
+                winner: result.round.winner,
+              }
+            : undefined,
+          message: result.message,
+        });
+      case 'no_round':
+        return createErrorResponse(
+          404,
+          'NO_LOCKED_ROUND',
+          result.message ?? 'No locked round found',
+        );
+      case 'not_ready':
+        return createErrorResponse(
+          409,
+          'ROUND_NOT_READY_TO_FINALIZE',
+          result.message ?? 'Round not ready to finalize yet',
+          {
+            roundId: result.round?.id,
+            roundNumber: result.round?.roundNumber,
+            endTime: result.round ? new Date(result.round.endTime).toISOString() : undefined,
+            now: new Date().toISOString(),
+          },
+        );
+      case 'cancelled':
+        return createErrorResponse(409, 'ROUND_CANCELLED', result.message ?? 'Round cancelled', {
+          roundId: result.round?.id,
+          roundNumber: result.round?.roundNumber,
+          endTime: result.round ? new Date(result.round.endTime).toISOString() : undefined,
+          now: new Date().toISOString(),
+        });
+      default:
+        return createErrorResponse(500, 'UNKNOWN_STATUS', 'Unknown finalizeRound status');
+    }
   } catch (error) {
     const jobDuration = Date.now() - jobStartTime;
     cronLogger.error('[Job 4] Failed', {
