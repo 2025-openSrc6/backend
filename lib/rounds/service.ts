@@ -37,8 +37,14 @@ import type {
   CalculatePayoutResult,
   DetermineWinnerResult,
   SettleRoundResult,
+  RecoveryRoundsResult,
 } from './types';
-import { BETTING_DURATIONS_MS, ROUND_DURATIONS_MS } from './constants';
+import {
+  ALERT_THRESHOLD_MS,
+  BETTING_DURATIONS_MS,
+  RETRY_START_THRESHOLD_MS,
+  ROUND_DURATIONS_MS,
+} from './constants';
 import { transitionRoundStatus } from './fsm';
 import { cronLogger } from '@/lib/cron/logger';
 import { calculatePayout, determineWinner } from './calculator';
@@ -805,6 +811,93 @@ export class RoundService {
 
       throw error;
     }
+  }
+
+  /**
+   * Recovery Job 메인 로직 (Job 6)
+   *
+   * 단순하게:
+   * 1. stuck 라운드 찾기 (CALCULATING + 10분 이상)
+   * 2. 각각에 대해 settleRound() 호출 또는 알림
+   * 3. 숫자만 반환
+   *
+   * @returns RecoveryRoundsResult - stuckCount, retriedCount, alertedCount
+   */
+  async recoveryRounds(): Promise<RecoveryRoundsResult> {
+    // TODO: 구현 필요
+    // 1. findStuckCalculatingRounds() 호출
+    // 2. 각 라운드에 대해:
+    //    - 30분 이상 경과 → Slack CRITICAL 알림, alertedCount++
+    //    - 10분~30분 → 재시도, retriedCount++
+    // 3. 결과 반환
+
+    const stuckRounds = await this.findStuckCalculatingRounds();
+    if (stuckRounds.length === 0) {
+      cronLogger.info('[Job 6] No stuck rounds found');
+      return { stuckCount: 0, retriedCount: 0, alertedCount: 0 };
+    }
+
+    const now = Date.now();
+
+    let retriedCount = 0;
+    let alertedCount = 0;
+
+    for (const stuckRound of stuckRounds) {
+      // 이미 알림 보냈으면 스킵
+      if (stuckRound.settlementFailureAlertSentAt) {
+        cronLogger.info('[Job 6] Alert already sent, skipping', {
+          roundId: stuckRound.id,
+          alertSentAt: new Date(stuckRound.settlementFailureAlertSentAt).toISOString(),
+        });
+        continue;
+      }
+
+      const stuckDuration = now - (stuckRound.roundEndedAt ?? 0);
+      if (stuckDuration >= ALERT_THRESHOLD_MS) {
+        cronLogger.error('[Job 6] 30min threshold exceeded, sending alert', {
+          roundId: stuckRound.id,
+          roundNumber: stuckRound.roundNumber,
+          stuckMinutes: Math.floor(stuckDuration / 60000),
+        });
+
+        // TODO(ehdnd): slack alert
+
+        await this.repository.updateById(stuckRound.id, {
+          settlementFailureAlertSentAt: now,
+        });
+
+        ++alertedCount;
+        continue;
+      }
+
+      // 재시도 시작
+      cronLogger.info('[Job 6] Retrying settlement', {
+        roundId: stuckRound.id,
+        stuckMinutes: Math.floor(stuckDuration / 60000),
+      });
+
+      ++retriedCount;
+      try {
+        await this.settleRound(stuckRound.id);
+      } catch (error) {
+        cronLogger.warn('[Job 6] Failed to settle round, will retry next minute', {
+          roundId: stuckRound.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { stuckCount: stuckRounds.length, retriedCount, alertedCount };
+  }
+
+  /**
+   * CALCULATING 상태 + roundEndedAt이 threshold 이전인 라운드 찾기
+   *
+   * @returns stuck 라운드 배열
+   */
+  async findStuckCalculatingRounds(): Promise<Round[]> {
+    const threshold = Date.now() - RETRY_START_THRESHOLD_MS;
+    return this.repository.findStuckCalculatingRounds(threshold);
   }
 
   /**

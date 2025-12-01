@@ -14,7 +14,7 @@
 
 import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type {
   Round,
@@ -242,6 +242,28 @@ export class RoundRepository {
       .orderBy(desc(rounds.startTime))
       .limit(1);
     return result[0] ?? null;
+  }
+
+  /**
+   * CALCULATING 상태 + roundEndedAt이 threshold 이전인 라운드 조회
+   *
+   * Recovery Job (Job 6)에서 사용
+   *
+   * @param thresholdMs - 기준 시각 (이 시각 이전에 CALCULATING 진입한 라운드)
+   * @returns stuck 라운드 배열 (오래된 것부터)
+   *
+   * @example
+   * const now = Date.now();
+   * const threshold = now - (10 * 60 * 1000); // 10분 전
+   * const stuckRounds = await repo.findStuckCalculatingRounds(threshold);
+   */
+  async findStuckCalculatingRounds(thresholdMs: number): Promise<Round[]> {
+    const db = getDb();
+    return db
+      .select()
+      .from(rounds)
+      .where(and(eq(rounds.status, 'CALCULATING'), lt(rounds.roundEndedAt, thresholdMs)))
+      .orderBy(asc(rounds.roundEndedAt));
   }
 
   /**

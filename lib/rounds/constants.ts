@@ -71,3 +71,9 @@ export const BETTING_DURATIONS_MS: Record<RoundType, number> = {
   '6HOUR': 60 * 1000, // 1분
   '1DAY': 10 * 60 * 1000, // 10분
 } as const;
+
+/**
+ * Recovery Job (Job 6) 설정 - 시간 기반
+ */
+export const RETRY_START_THRESHOLD_MS = 10 * 60 * 1000; // 10분: 재시도 시작
+export const ALERT_THRESHOLD_MS = 30 * 60 * 1000; // 30분: 알림 발송 + 포기
