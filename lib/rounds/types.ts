@@ -274,3 +274,23 @@ export interface SettleRoundResult {
   totalPayout?: number;
   message?: string;
 }
+
+// ============================================
+// Recovery Job Types (Job 6)
+// ============================================
+
+/**
+ * Service.recoveryRounds() 반환 타입
+ *
+ * 단순하게 숫자만 반환. 매 분 실행되므로 세밀한 상태 추적 불필요.
+ *
+ * 설계 근거:
+ * - Recovery Job은 매 분 실행되므로 이번에 실패해도 다음 분에 재시도
+ * - 개별 라운드 결과를 세밀하게 추적할 필요 없음
+ * - 중요한 건 "30분 이상 경과로 Slack CRITICAL 알림 발송" 뿐
+ */
+export interface RecoveryRoundsResult {
+  stuckCount: number; // 발견된 stuck 라운드 수
+  retriedCount: number; // settleRound() 호출한 라운드 수
+  alertedCount: number; // 30분 이상 경과로 Slack CRITICAL 알림 발송한 라운드 수
+}
