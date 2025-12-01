@@ -14,7 +14,7 @@
 
 import { getDb } from '@/lib/db';
 import { rounds } from '@/db/schema';
-import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type {
   Round,
@@ -271,7 +271,12 @@ export class RoundRepository {
     return db
       .select()
       .from(rounds)
-      .where(and(eq(rounds.status, 'CALCULATING'), lt(rounds.roundEndedAt, thresholdMs)))
+      .where(
+        and(
+          eq(rounds.status, 'CALCULATING'),
+          or(isNull(rounds.roundEndedAt), lt(rounds.roundEndedAt, thresholdMs)),
+        ),
+      )
       .orderBy(asc(rounds.roundEndedAt));
   }
 
