@@ -156,6 +156,14 @@ export class RoundRepository {
     type: RoundType,
   ): Promise<boolean> {
     const db = getDb();
+    // CANCELLED/VOIDED 라운드는 겹침 판단에서 제외 (대체 라운드 생성 허용)
+    const blockingStatuses: RoundStatus[] = [
+      'SCHEDULED',
+      'BETTING_OPEN',
+      'BETTING_LOCKED',
+      'CALCULATING',
+      'SETTLED',
+    ];
 
     const result = await db
       .select()
@@ -163,6 +171,7 @@ export class RoundRepository {
       .where(
         and(
           eq(rounds.type, type),
+          inArray(rounds.status, blockingStatuses),
           sql`NOT (${endTime} <= ${rounds.startTime} OR ${startTime} >= ${rounds.endTime})`,
         ),
       );
