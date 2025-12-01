@@ -121,6 +121,9 @@ export const rounds = sqliteTable(
     /** 정산 완료 시각 (Epoch milliseconds) */
     settlementCompletedAt: integer('settlement_completed_at', { mode: 'number' }),
 
+    /** 정산 실패 알림 발송 시각 (중복 방지용) */
+    settlementFailureAlertSentAt: integer('settlement_failure_alert_sent_at', { mode: 'number' }),
+
     /** 생성 시각 (Epoch milliseconds) */
     createdAt: integer('created_at', { mode: 'number' })
       .notNull()
