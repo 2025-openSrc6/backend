@@ -1,7 +1,7 @@
 import { cronLogger } from '@/lib/cron/logger';
 import { NextRequest } from 'next/server';
 import { verifyCronAuth } from '@/lib/cron/auth';
-import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
+import { createErrorResponse, createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { registry } from '@/lib/registry';
 
 /**
@@ -37,7 +37,31 @@ export async function POST(request: NextRequest) {
       durationMs: jobDuration,
     });
 
-    return createSuccessResponse(result);
+    switch (result.status) {
+      case 'locked':
+        return createSuccessResponse(result);
+      case 'no_round':
+        return createErrorResponse(404, 'NO_OPEN_ROUND', result.message ?? 'No open round found');
+      case 'not_ready':
+        return createErrorResponse(
+          409,
+          'ROUND_NOT_READY_TO_LOCK',
+          result.message ?? 'Round not ready to lock yet',
+          {
+            roundId: result.round?.id,
+            roundNumber: result.round?.roundNumber,
+            lockTime: result.round ? new Date(result.round.lockTime).toISOString() : undefined,
+            now: new Date().toISOString(),
+          },
+        );
+      case 'cancelled':
+        return createErrorResponse(409, 'ROUND_CANCELLED', result.message ?? 'Round cancelled', {
+          roundId: result.round?.id,
+          roundNumber: result.round?.roundNumber,
+        });
+      default:
+        return createErrorResponse(500, 'UNKNOWN_STATUS', 'Unknown lockRound status');
+    }
   } catch (error) {
     const jobDuration = Date.now() - jobStartTime;
     cronLogger.error('[Job 3] Failed', {

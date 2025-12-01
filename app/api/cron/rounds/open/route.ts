@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { verifyCronAuth } from '@/lib/cron/auth';
 import { cronLogger } from '@/lib/cron/logger';
 import { registry } from '@/lib/registry';
-import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
+import { createErrorResponse, createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { PriceData } from '@/lib/rounds/types';
 
 /**
@@ -61,8 +61,42 @@ export async function POST(request: NextRequest) {
       durationMs: jobDuration,
     });
 
-    // 응답 반환
-    return createSuccessResponse(result);
+    // 응답 반환 - 실패 상태는 success:false + 비 2xx로 응답
+    switch (result.status) {
+      case 'opened':
+        return createSuccessResponse(result);
+      case 'no_round':
+        return createErrorResponse(
+          404,
+          'NO_SCHEDULED_ROUND',
+          result.message ?? 'No scheduled round found',
+        );
+      case 'not_ready':
+        return createErrorResponse(
+          409,
+          'ROUND_NOT_READY',
+          result.message ?? 'Round not ready yet (startTime not reached)',
+          {
+            roundId: result.round?.id,
+            roundNumber: result.round?.roundNumber,
+            startTime: result.round ? new Date(result.round.startTime).toISOString() : undefined,
+            lockTime: result.round ? new Date(result.round.lockTime).toISOString() : undefined,
+            now: new Date().toISOString(),
+          },
+        );
+      case 'cancelled':
+        return createErrorResponse(
+          409,
+          'ROUND_CANCELLED',
+          result.message ?? 'Round cancelled (missed open window)',
+          {
+            roundId: result.round?.id,
+            roundNumber: result.round?.roundNumber,
+          },
+        );
+      default:
+        return createErrorResponse(500, 'UNKNOWN_STATUS', 'Unknown openRound status');
+    }
   } catch (error) {
     const jobDuration = Date.now() - jobStartTime;
     cronLogger.error('[Job 2] Failed', {

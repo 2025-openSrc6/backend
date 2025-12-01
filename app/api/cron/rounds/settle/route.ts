@@ -1,7 +1,7 @@
 import { verifyCronAuth } from '@/lib/cron/auth';
 import { cronLogger } from '@/lib/cron/logger';
 import { registry } from '@/lib/registry';
-import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
+import { createErrorResponse, createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { ValidationError } from '@/lib/shared/errors';
 import { NextRequest } from 'next/server';
 
@@ -54,14 +54,49 @@ export async function POST(request: NextRequest) {
       durationMs: jobDuration,
     });
 
-    return createSuccessResponse({
-      roundId: result.roundId,
-      status: result.status,
-      settledCount: result.settledCount,
-      failedCount: result.failedCount,
-      totalPayout: result.totalPayout,
-      message: result.message,
-    });
+    switch (result.status) {
+      case 'settled':
+      case 'already_settled':
+      case 'no_bets':
+        return createSuccessResponse({
+          roundId: result.roundId,
+          status: result.status,
+          settledCount: result.settledCount,
+          failedCount: result.failedCount,
+          totalPayout: result.totalPayout,
+          message: result.message,
+        });
+      case 'partial':
+        return createErrorResponse(
+          500,
+          'PARTIAL_SETTLEMENT',
+          result.message ?? 'Settlement partially completed',
+          {
+            roundId: result.roundId,
+            settledCount: result.settledCount,
+            failedCount: result.failedCount,
+            totalPayout: result.totalPayout,
+            status: result.status,
+          },
+        );
+      case 'failed':
+        return createErrorResponse(
+          500,
+          'SETTLEMENT_FAILED',
+          result.message ?? 'Settlement failed',
+          {
+            roundId: result.roundId,
+            status: result.status,
+            settledCount: result.settledCount,
+            failedCount: result.failedCount,
+          },
+        );
+      default:
+        return createErrorResponse(500, 'UNKNOWN_STATUS', 'Unknown settleRound status', {
+          roundId: result.roundId,
+          status: result.status,
+        });
+    }
   } catch (error) {
     const jobDuration = Date.now() - jobStartTime;
     cronLogger.error('[Job 5] Failed', {
