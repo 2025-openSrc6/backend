@@ -1,0 +1,1 @@
+ALTER TABLE `rounds` ADD `settlement_failure_alert_sent_at` integer;
