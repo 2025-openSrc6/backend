@@ -1153,9 +1153,8 @@ async findBetsByRoundId(roundId: string): Promise<Bet[]> {
 ### 핵심 작업
 
 1. **CALCULATING 상태 10분+ 라운드 찾기** (Job 4, 5 실패)
-2. **Job 5 재호출** (정산 재시도)
-3. **3회 실패 → Slack CRITICAL 알림** (수동 개입 필요)
-4. 필요 시 BETTING_LOCKED + endTime 지난 라운드를 Job 4 재호출로 확장 가능 (Job 4 실패 대비)
+2. **settleRound() 재호출** (정산 재시도, 약 20회)
+3. **30분 경과 시 → Slack CRITICAL 알림 + 포기** (수동 개입 필요)
 
 ### 설계 의사결정
 
@@ -1169,13 +1168,67 @@ async findBetsByRoundId(roundId: string): Promise<Bet[]> {
 >
 > Recovery는 **"이미 베팅이 들어온 라운드의 정산 실패"**만 복구합니다.
 
-> **Q: BETTING_LOCKED 상태가 오래 지속되면요?**
+> **Q: 왜 "3회 재시도"가 아닌 "30분 시간 기반"인가요?**
 >
-> A: Job 4가 실패한 것입니다.
-> Recovery에서 BETTING_LOCKED + endTime 지난 라운드도 찾아서 Job 4를 다시 호출할 수 있습니다.
-> (Week 2 구현 시 추가)
+> A: **매 분 실행**되므로 횟수 기반은 너무 빠르기 때문입니다.
+>
+> - 횟수 기반 (3회): 3분 만에 포기 → 일시적 장애 대응 불가
+> - 시간 기반 (30분): 약 20회 재시도 → 충분한 복구 기회
+>
+> 일시적 DB 장애, 네트워크 지연 등에 대응하려면 **시간 여유**가 필요합니다.
 
-### 구현
+> **Q: 왜 복잡한 결과 추적이 필요 없나요?**
+>
+> A: **매 분 실행**되기 때문입니다.
+>
+> - 이번에 일부만 성공? → 다음 분에 또 시도
+> - 이번에 전부 실패? → 다음 분에 또 시도
+> - 30분 경과? → 알림 보내고 포기 (개발자 수동 처리)
+>
+> 세밀한 상태 추적(`partially_recovered` 등)은 **의미 없습니다**.
+
+### 시간 기반 로직 (의사코드)
+
+```
+매 분마다:
+1. CALCULATING 상태 + 10분 이상 지난 라운드 찾기
+
+2. 각 라운드에 대해:
+
+   if (settlementFailureAlertSentAt != null):
+     → SKIP (이미 알림 보냄, 개발자 수동 처리 중)
+
+   if (30분 이상 경과):
+     → Slack CRITICAL 알림 발송
+     → settlementFailureAlertSentAt = now 저장
+     → alertedCount++ (더 이상 재시도 안 함)
+
+   else (10분~30분):
+     → settleRound() 호출
+     → retriedCount++
+
+3. 결과 반환 (숫자 3개: stuckCount, retriedCount, alertedCount)
+```
+
+### 타임라인 예시
+
+```
+T+00:00  CALCULATING 진입 (roundEndedAt)
+T+10:00  Recovery 감지, settleRound() 재시도 ①
+T+11:00  Recovery 감지, settleRound() 재시도 ②
+...
+T+29:00  Recovery 감지, settleRound() 재시도 ⑳
+T+30:00  30분 경과 → Slack CRITICAL 알림 발송
+         settlementFailureAlertSentAt = now
+T+31:00  Recovery 감지 → SKIP (알림 보냈으므로 제외)
+T+32:00  Recovery 감지 → SKIP
+...
+(개발자가 수동으로 처리할 때까지 SKIP)
+```
+
+### Route 구현 (`app/api/cron/recovery/route.ts`)
+
+Route는 얇게 유지 (인증 → Service 호출 → 응답):
 
 ```typescript
 import { NextRequest } from 'next/server';
@@ -1183,124 +1236,38 @@ import { verifyCronAuth } from '@/lib/cron/auth';
 import { registry } from '@/lib/registry';
 import { createSuccessResponse, handleApiError } from '@/lib/shared/response';
 import { cronLogger } from '@/lib/cron/logger';
-import { sendSlackAlert } from '@/lib/cron/slack';
-import { getRecoveryStuckThresholdMs } from '@/lib/config/cron';
-
-const MAX_RETRY_COUNT = 3;
 
 /**
  * POST /api/cron/recovery
  *
  * Job 6: Recovery & Monitoring
- *
- * 돈이 걸린 Job의 실패를 복구:
- * 1. CALCULATING 상태가 10분+ 지속된 라운드 찾기
- * 2. Job 5 재호출 (정산 재시도)
- * 3. 3회 실패 → Slack CRITICAL 알림
+ * Route는 인증 + Service 호출만. 로직은 Service에서 처리.
  */
 export async function POST(request: NextRequest) {
   const jobStartTime = Date.now();
   cronLogger.info('[Job 6] Recovery started');
 
   try {
-    // 1. 인증 검증
+    // 인증 검증
     const authResult = await verifyCronAuth(request);
     if (!authResult.success) {
       cronLogger.warn('[Job 6] Auth failed');
       return authResult.response;
     }
 
-    // 2. CALCULATING 상태가 오래 지속된 라운드 찾기
-    const stuckRounds = await registry.roundService.findStuckCalculatingRounds();
-
-    if (stuckRounds.length === 0) {
-      cronLogger.info('[Job 6] No stuck rounds found');
-      return createSuccessResponse({ message: 'No stuck rounds' });
-    }
-
-    cronLogger.warn('[Job 6] Found stuck rounds', {
-      count: stuckRounds.length,
-      roundIds: stuckRounds.map((r) => r.id),
-    });
-
-    // 3. 각 라운드 복구 시도
-    const results: {
-      roundId: string;
-      action: 'retried' | 'alerted' | 'skipped';
-      retryCount?: number;
-    }[] = [];
-
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-
-    for (const round of stuckRounds) {
-      // 3-1. 재시도 횟수 확인
-      const retryCount = round.settlementRetryCount || 0;
-
-      if (retryCount >= MAX_RETRY_COUNT) {
-        // 3회 이상 실패 → Slack CRITICAL 알림
-        cronLogger.error('[Job 6] Max retries exceeded', {
-          roundId: round.id,
-          retryCount,
-        });
-
-        await sendSlackAlert({
-          level: 'CRITICAL',
-          job: 'Recovery',
-          message: `라운드 ${round.roundNumber} 정산 ${retryCount}회 실패, 수동 개입 필요`,
-          details: {
-            roundId: round.id,
-            roundNumber: round.roundNumber,
-            retryCount,
-            winner: round.winner,
-            totalPool: round.totalPool,
-          },
-        });
-
-        results.push({ roundId: round.id, action: 'alerted', retryCount });
-        continue;
-      }
-
-      // 3-2. Job 5 재호출
-      try {
-        cronLogger.info('[Job 6] Retrying settlement', {
-          roundId: round.id,
-          attempt: retryCount + 1,
-        });
-
-        await fetch(`${baseUrl}/api/cron/rounds/settle`, {
-          method: 'POST',
-          headers: {
-            'X-Cron-Secret': process.env.CRON_SECRET!,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ roundId: round.id }),
-        });
-
-        results.push({ roundId: round.id, action: 'retried', retryCount: retryCount + 1 });
-      } catch (error) {
-        cronLogger.error('[Job 6] Retry failed', {
-          roundId: round.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-
-        results.push({ roundId: round.id, action: 'skipped' });
-      }
-    }
+    // Service 호출 (모든 로직은 Service에서)
+    const result = await registry.roundService.recoveryRounds();
 
     const jobDuration = Date.now() - jobStartTime;
-    cronLogger.info('[Job 6] Completed', {
-      durationMs: jobDuration,
-      results,
-    });
+    cronLogger.info('[Job 6] Completed', { durationMs: jobDuration, ...result });
 
-    return createSuccessResponse({ results });
+    return createSuccessResponse(result);
   } catch (error) {
     const jobDuration = Date.now() - jobStartTime;
     cronLogger.error('[Job 6] Failed', {
       durationMs: jobDuration,
       error: error instanceof Error ? error.message : String(error),
     });
-
     return handleApiError(error);
   }
 }
@@ -1309,36 +1276,145 @@ export async function POST(request: NextRequest) {
 ### Service Layer 메서드
 
 ```typescript
-// lib/rounds/round.service.ts
+// lib/rounds/service.ts
+
+const RETRY_START_THRESHOLD_MS = 10 * 60 * 1000; // 10분: 재시도 시작
+const ALERT_THRESHOLD_MS = 30 * 60 * 1000;       // 30분: 알림 발송 + 포기
 
 /**
- * CALCULATING 상태가 오래 지속된 라운드 찾기
+ * Recovery Job 메인 로직 (시간 기반)
  *
- * 기준: settlementStartedAt + 10분 < NOW
+ * 1. CALCULATING + 10분 이상 stuck 라운드 찾기
+ * 2. 각 라운드:
+ *    - 알림 이미 보냈으면 → SKIP (개발자 처리 중)
+ *    - 30분 이상 경과 → 알림 + 포기
+ *    - 10분~30분 → 재시도
+ * 3. 숫자만 반환
  */
-async findStuckCalculatingRounds(): Promise<Round[]> {
-  const threshold = Date.now() - getRecoveryStuckThresholdMs();
+async recoveryRounds(): Promise<RecoveryRoundsResult> {
+  const now = Date.now();
 
+  // CALCULATING + 10분 이상 지난 라운드
+  const stuckRounds = await this.findStuckCalculatingRounds(
+    now - RETRY_START_THRESHOLD_MS
+  );
+
+  if (stuckRounds.length === 0) {
+    return { stuckCount: 0, retriedCount: 0, alertedCount: 0 };
+  }
+
+  let retriedCount = 0;
+  let alertedCount = 0;
+
+  for (const round of stuckRounds) {
+    // 이미 알림 보냈으면 SKIP (개발자 수동 처리 중)
+    if (round.settlementFailureAlertSentAt) {
+      cronLogger.info('[Job 6] Alert already sent, skipping', {
+        roundId: round.id,
+        alertSentAt: new Date(round.settlementFailureAlertSentAt).toISOString(),
+      });
+      continue;
+    }
+
+    const stuckDuration = now - (round.roundEndedAt ?? 0);
+
+    // 30분 이상 → 알림 + 포기
+    if (stuckDuration >= ALERT_THRESHOLD_MS) {
+      cronLogger.error('[Job 6] 30min threshold exceeded, sending alert', {
+        roundId: round.id,
+        roundNumber: round.roundNumber,
+        stuckMinutes: Math.floor(stuckDuration / 60000),
+      });
+
+      await sendSlackAlert({
+        level: 'CRITICAL',
+        job: 'Recovery',
+        message: `라운드 ${round.roundNumber} 정산 30분 실패, 수동 개입 필요`,
+        details: {
+          roundId: round.id,
+          roundNumber: round.roundNumber,
+          stuckMinutes: Math.floor(stuckDuration / 60000),
+          winner: round.winner,
+          totalPool: round.totalPool,
+        },
+      });
+
+      // 알림 발송 시각 기록
+      await this.repository.updateById(round.id, {
+        settlementFailureAlertSentAt: now,
+      });
+
+      alertedCount++;
+      continue; // 더 이상 재시도 안 함
+    }
+
+    // 10분~30분 → 재시도
+    cronLogger.info('[Job 6] Retrying settlement', {
+      roundId: round.id,
+      stuckMinutes: Math.floor(stuckDuration / 60000),
+    });
+
+    try {
+      await this.settleRound(round.id);
+      retriedCount++;
+    } catch (error) {
+      cronLogger.warn('[Job 6] settleRound failed, will retry next minute', {
+        roundId: round.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      retriedCount++; // 시도는 했으므로 카운트
+    }
+  }
+
+  return {
+    stuckCount: stuckRounds.length,
+    retriedCount,
+    alertedCount,
+  };
+}
+
+/**
+ * CALCULATING 상태가 threshold 이상 지속된 라운드 찾기
+ *
+ * @param thresholdMs - Date.now() - RETRY_START_THRESHOLD_MS
+ */
+async findStuckCalculatingRounds(thresholdMs: number): Promise<Round[]> {
+  return this.repository.findStuckCalculatingRounds(thresholdMs);
+}
+```
+
+### Repository 메서드
+
+```typescript
+// lib/rounds/repository.ts
+
+/**
+ * CALCULATING 상태 + roundEndedAt이 threshold 이전인 라운드 조회
+ *
+ * @param thresholdMs - 기준 시각 (이 시각 이전에 CALCULATING 진입한 라운드)
+ */
+async findStuckCalculatingRounds(thresholdMs: number): Promise<Round[]> {
   return this.db
     .select()
     .from(rounds)
     .where(
       and(
         eq(rounds.status, 'CALCULATING'),
-        lt(rounds.settlementStartedAt, threshold)
+        lt(rounds.roundEndedAt, thresholdMs) // CALCULATING 진입 시각
       )
     )
-    .orderBy(asc(rounds.settlementStartedAt));
+    .orderBy(asc(rounds.roundEndedAt)); // 오래된 것부터
 }
 ```
 
 ### 알림 정책
 
-| 상황                   | Level    | 메시지                                   |
-| ---------------------- | -------- | ---------------------------------------- |
-| 정산 1회 실패          | WARNING  | "라운드 N 정산 실패, 재시도 예정"        |
-| 정산 3회 실패          | CRITICAL | "라운드 N 정산 3회 실패, 수동 개입 필요" |
-| Recovery Job 자체 실패 | ERROR    | "Recovery Job 실패"                      |
+| 상황                   | Level    | 메시지                                    | 처리                        |
+| ---------------------- | -------- | ----------------------------------------- | --------------------------- |
+| 정산 30분 경과         | CRITICAL | "라운드 N 정산 30분 실패, 수동 개입 필요" | 포기 (더 이상 재시도 안 함) |
+| Recovery Job 자체 실패 | ERROR    | handleApiError에서 처리                   | Route에서 catch             |
+
+> **참고**: 10분~30분 사이 재시도 실패 시 별도 알림 없음. 매 분 자동 재시도되므로 로그로만 기록.
 
 ---
 
@@ -2069,11 +2145,14 @@ T+6시간: Job 4 (Finalize) + Job 2 (Open 다음 라운드)
   - [x] `BetService` DI 주입
 - [ ] app/api/cron/rounds/finalize/route.ts - Job 4 (단일 라운드 처리, Recovery 대상)
 - [ ] app/api/cron/rounds/settle/route.ts - Job 5 (얇은 래퍼, Service 호출)
-- [ ] app/api/cron/recovery/route.ts - Job 6 (CALCULATING 복구)
+- [ ] app/api/cron/recovery/route.ts - Job 6 (얇은 래퍼, Service 호출)
 - [ ] lib/cron/slack.ts - Slack 알림
-- [ ] lib/rounds/round.service.ts - 복구 메서드:
-  - [ ] `findStuckCalculatingRounds()`
-  - [ ] `incrementRetryCount()`
+- [ ] db/schema/rounds.ts - `settlementFailureAlertSentAt` 필드 추가 완료
+- [ ] lib/rounds/service.ts - Job 6 복구 메서드 (시간 기반):
+  - [ ] `recoveryRounds()` (메인 로직: 10분 재시도, 30분 알림)
+  - [ ] `findStuckCalculatingRounds(threshold)` (stuck 라운드 조회)
+- [ ] lib/rounds/repository.ts - Job 6 Repository 메서드:
+  - [ ] `findStuckCalculatingRounds(threshold)` (roundEndedAt 기준 DB 쿼리)
 - [ ] FSM 필수 필드 복원 (suiPoolAddress, suiSettlementObjectId)
 - [ ] DB 마이그레이션 실행 (`payoutPool` 컬럼 적용)
 
