@@ -114,16 +114,17 @@ distribute_payout() → emit PayoutDistributed { user: address, ... }
 contracts/
 ├── Move.toml
 ├── sources/
-│   ├── del_coin.move      # DEL 토큰
-│   ├── betting.move       # 베팅 로직
-│   └── settlement.move    # 정산 로직
+│   ├── del.move           # DEL 토큰
+│   └── betting.move       # 베팅 + 정산 로직 (통합)
 └── tests/
-    ├── del_coin_tests.move
-    ├── betting_tests.move
-    └── settlement_tests.move
+    ├── del_tests.move
+    └── betting_tests.move
 ```
 
-### 3.2 del_coin.move
+> **Note**: 기존 settlement.move는 betting.move에 통합됨.
+> 이유: 1) 의존성 단순화 2) BettingPool/Bet 객체를 한 모듈에서 관리 3) 프로토타입 단계에서 파일 분리 오버헤드 감소
+
+### 3.2 del.move
 
 #### Struct
 
@@ -297,42 +298,38 @@ public fun lock_pool(
 public fun get_pool_stats(pool: &BettingPool): (u64, u64, u64, u64)
 ```
 
----
+#### 정산 관련 (기존 settlement.move에서 통합)
 
-### 3.4 settlement.move
-
-#### Struct
+##### Settlement Struct
 
 ```move
-module deltax::settlement {
-    /// 정산 기록 (Shared Object, 불변)
-    struct Settlement has key {
-        id: UID,
-        pool_id: ID,
-        round_id: u64,
+/// 정산 기록 (Shared Object, 불변)
+struct Settlement has key {
+    id: UID,
+    pool_id: ID,
+    round_id: u64,
 
-        // 가격 데이터 (정수, 소수점 2자리 → *100)
-        gold_start: u64,      // 265050 = $2650.50
-        gold_end: u64,
-        btc_start: u64,
-        btc_end: u64,
+    // 가격 데이터 (정수, 소수점 2자리 → *100)
+    gold_start: u64,      // 265050 = $2650.50
+    gold_end: u64,
+    btc_start: u64,
+    btc_end: u64,
 
-        // 결과
-        winner: u8,           // 1=GOLD, 2=BTC, 3=DRAW
+    // 결과
+    winner: u8,           // 1=GOLD, 2=BTC, 3=DRAW
 
-        // 풀 정보
-        total_pool: u64,
-        winning_pool: u64,
-        platform_fee: u64,
-        payout_ratio: u64,    // 178 = 1.78x (scale=100)
+    // 풀 정보
+    total_pool: u64,
+    winning_pool: u64,
+    platform_fee: u64,
+    payout_ratio: u64,    // 178 = 1.78x (scale=100)
 
-        // 메타
-        settled_at: u64,
-    }
+    // 메타
+    settled_at: u64,
 }
 ```
 
-#### 상수
+##### 정산 상수
 
 ```move
 const WINNER_GOLD: u8 = 1;
@@ -349,7 +346,7 @@ const E_NOT_WINNER: u64 = 13;
 const E_ROUND_MISMATCH: u64 = 14;
 ```
 
-#### Events
+##### 정산 Events
 
 ```move
 /// 정산 완료 이벤트
@@ -381,7 +378,7 @@ struct RefundProcessed has copy, drop {
 }
 ```
 
-#### 함수 시그니처
+##### 정산 함수
 
 ```move
 /// 라운드 정산 (Cron Job 4에서 호출)
