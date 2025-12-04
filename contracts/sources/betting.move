@@ -577,3 +577,117 @@ public fun distribute_payout(
 
     payout_coin
 }
+
+// ============ Test-only Functions ============
+
+#[test_only]
+/// 테스트용 init 호출 헬퍼
+public fun test_init(ctx: &mut TxContext) {
+    init(ctx);
+}
+
+#[test_only]
+/// Pool 상태 조회 (테스트용)
+public fun get_pool_status(pool: &BettingPool): u8 {
+    pool.status
+}
+
+#[test_only]
+/// Pool 통계 조회 (테스트용)
+/// Returns: (total_pool, gold_pool, btc_pool, bet_count)
+public fun get_pool_stats(pool: &BettingPool): (u64, u64, u64, u64) {
+    (pool.total_pool, pool.gold_pool, pool.btc_pool, pool.bet_count)
+}
+
+#[test_only]
+/// Pool round_id 조회 (테스트용)
+public fun get_pool_round_id(pool: &BettingPool): u64 {
+    pool.round_id
+}
+
+#[test_only]
+/// Pool 시간 조회 (테스트용)
+/// Returns: (lock_time, end_time)
+public fun get_pool_times(pool: &BettingPool): (u64, u64) {
+    (pool.lock_time, pool.end_time)
+}
+
+#[test_only]
+/// Settlement 승자 조회 (테스트용)
+public fun get_settlement_winner(settlement: &Settlement): u8 {
+    settlement.winner
+}
+
+#[test_only]
+/// Settlement 배당률 조회 (테스트용)
+public fun get_settlement_payout_ratio(settlement: &Settlement): u64 {
+    settlement.payout_ratio
+}
+
+#[test_only]
+/// Settlement 수수료 조회 (테스트용)
+public fun get_settlement_platform_fee(settlement: &Settlement): u64 {
+    settlement.platform_fee
+}
+
+#[test_only]
+/// Settlement round_id 조회 (테스트용)
+public fun get_settlement_round_id(settlement: &Settlement): u64 {
+    settlement.round_id
+}
+
+#[test_only]
+/// Bet 정보 조회 (테스트용)
+/// Returns: (user, prediction, amount)
+public fun get_bet_info(bet: &Bet): (address, u8, u64) {
+    (bet.user, bet.prediction, bet.amount)
+}
+
+#[test_only]
+/// 상수 노출 (테스트용)
+public fun status_open(): u8 { STATUS_OPEN }
+
+#[test_only]
+public fun status_locked(): u8 { STATUS_LOCKED }
+
+#[test_only]
+public fun status_settled(): u8 { STATUS_SETTLED }
+
+#[test_only]
+public fun prediction_gold(): u8 { PREDICTION_GOLD }
+
+#[test_only]
+public fun prediction_btc(): u8 { PREDICTION_BTC }
+
+#[test_only]
+public fun winner_gold(): u8 { WINNER_GOLD }
+
+#[test_only]
+public fun winner_btc(): u8 { WINNER_BTC }
+
+#[test_only]
+public fun min_bet_amount(): u64 { MIN_BET_AMOUNT }
+
+#[test_only]
+public fun e_pool_not_open(): u64 { E_POOL_NOT_OPEN }
+
+#[test_only]
+public fun e_invalid_prediction(): u64 { E_INVALID_PREDICTION }
+
+#[test_only]
+public fun e_insufficient_amount(): u64 { E_INSUFFICIENT_AMOUNT }
+
+#[test_only]
+public fun e_too_late(): u64 { E_TOO_LATE }
+
+#[test_only]
+public fun e_not_locked(): u64 { E_NOT_LOCKED }
+
+#[test_only]
+public fun e_too_early(): u64 { E_TOO_EARLY }
+
+#[test_only]
+public fun e_already_settled(): u64 { E_ALREADY_SETTLED }
+
+#[test_only]
+public fun e_round_mismatch(): u64 { E_ROUND_MISMATCH }
