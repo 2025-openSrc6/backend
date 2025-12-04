@@ -275,3 +275,125 @@ public fun lock_pool(_admin: &AdminCap, pool: &mut BettingPool, clock: &Clock) {
     // 2. 상태 변경
     pool.status = STATUS_LOCKED;
 }
+
+/// # 라운드 정산 (Admin 전용)
+///
+/// ## 언제 호출?
+/// - 라운드 종료 시간(end_time) 이후
+/// - Cron Job이 가격 데이터와 함께 호출
+///
+/// ## 흐름
+/// 1. 검증: LOCKED 상태, end_time 지남
+/// 2. 승자 결정: 변동률 비교 (동점 시 GOLD)
+/// 3. 배당 계산: 수수료 5% 제외 후 비율 계산
+/// 4. Settlement 생성 → Shared Object
+/// 5. 상태 변경: LOCKED → SETTLED
+///
+/// ## Arguments
+/// - `_admin`: AdminCap 참조
+/// - `pool`: 정산할 Pool
+/// - `gold_start/end`: 금 시작/종료 가격 (*100, 소수점 2자리)
+/// - `btc_start/end`: BTC 시작/종료 가격 (*100)
+/// - `clock`: 현재 시간
+///
+/// ## Returns
+/// - 생성된 Settlement ID
+///
+/// ## Errors
+/// - E_NOT_LOCKED: LOCKED 상태가 아님
+/// - E_TOO_EARLY: end_time 전에 호출함
+public fun finalize_round(
+    _admin: &AdminCap,
+    pool: &mut BettingPool,
+    gold_start: u64,
+    gold_end: u64,
+    btc_start: u64,
+    btc_end: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    let now = clock::timestamp_ms(clock);
+    // 1. 검증
+    assert!(pool.status == STATUS_LOCKED, E_NOT_LOCKED);
+    assert!(now >= pool.end_time, E_TOO_EARLY);
+
+    // 2. 승자 결정
+    // 가격이 올랐는지 확인
+    let gold_went_up = gold_end >= gold_start;
+    let btc_went_up = btc_end >= btc_start;
+
+    // 변동폭 계산 (절대값)
+    let gold_change = if (gold_went_up) {
+        gold_end - gold_start
+    } else {
+        gold_start - gold_end
+    };
+
+    let btc_change = if (btc_went_up) {
+        btc_end - btc_start
+    } else {
+        btc_start - btc_end
+    };
+
+    let gold_score = gold_change * btc_start;
+    let btc_score = btc_change * gold_start;
+
+    // 승자 결정
+    // 현재 변동률이 더 큰 쪽이 승리
+    let winner = if (gold_score >= btc_score) {
+        WINNER_GOLD // 동점 시 GOLD
+    } else {
+        WINNER_BTC
+    };
+
+    // 3. 배당 계산
+    // 승자 풀 금액
+    let winning_pool = if (winner == WINNER_GOLD) {
+        pool.gold_pool
+    } else {
+        pool.btc_pool
+    };
+
+    // 플랫폼 수수료 (5%)
+    let platform_fee = pool.total_pool * PLATFORM_FEE_RATE / 100;
+
+    // 배당 풀 (총액 - 수수료)
+    let payout_pool = pool.total_pool - platform_fee;
+
+    // 배당률 (예: 178 = 1.78배)
+    // 승자 풀이 0이면 divide by zero 방지
+    let payout_ratio = if (winning_pool > 0) {
+        payout_pool * RATIO_SCALE / winning_pool
+    } else {
+        0
+    };
+
+    // 4. Settlement 생성
+    let settlement = Settlement {
+        id: object::new(ctx),
+        pool_id: object::id(pool),
+        round_id: pool.round_id,
+        gold_start,
+        gold_end,
+        btc_start,
+        btc_end,
+        winner,
+        total_pool: pool.total_pool,
+        winning_pool,
+        platform_fee,
+        payout_ratio,
+        settled_at: now,
+    };
+
+    // Settlement ID 저장 (share 전에!)
+    let settlement_id = object::id(&settlement);
+
+    // Shared Object로 만들기 (누구나 조회 가능)
+    transfer::share_object(settlement);
+
+    // 5. 상태 변경
+    pool.status = STATUS_SETTLED;
+
+    // 6. ID 반환
+    settlement_id
+}
