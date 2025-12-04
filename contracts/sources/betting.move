@@ -348,9 +348,14 @@ public fun finalize_round(
 
     // 3. 배당 계산
     // 승자 풀 금액
+    // 승자 풀에 패자 풀 합침
     let winning_pool = if (winner == WINNER_GOLD) {
+        let btc_all = balance::withdraw_all(&mut pool.btc_balance);
+        balance::join(&mut pool.gold_balance, btc_all);
         pool.gold_pool
     } else {
+        let gold_all = balance::withdraw_all(&mut pool.gold_balance);
+        balance::join(&mut pool.btc_balance, gold_all);
         pool.btc_pool
     };
 
@@ -359,6 +364,8 @@ public fun finalize_round(
 
     // 배당 풀 (총액 - 수수료)
     let payout_pool = pool.total_pool - platform_fee;
+
+    // TODO(ehdnd): fee 처리. winning 에서 admin 전송
 
     // 배당률 (예: 178 = 1.78배)
     // 승자 풀이 0이면 divide by zero 방지
@@ -396,4 +403,80 @@ public fun finalize_round(
 
     // 6. ID 반환
     settlement_id
+}
+
+/// # 배당 전송 (Admin 전용)
+///
+/// ## 언제 호출?
+/// - 라운드 정산(finalize_round) 완료 후
+/// - 각 Bet에 대해 개별적으로 호출 (Cron Job이 순회)
+///
+/// ## 흐름
+/// 1. 검증: Pool이 SETTLED 상태인지, 같은 라운드인지
+/// 2. 배당금 계산: 승자면 bet.amount * payout_ratio, 패자면 0
+/// 3. Bet 소각: 소유권 이전받은 Bet 객체 삭제 (재사용 방지)
+/// 4. 배당금 전송: Pool balance에서 payout 만큼 분리 → Coin 반환
+///
+/// ## Arguments
+/// - `_admin`: AdminCap 참조 (권한 확인용)
+/// - `pool`: 정산된 Pool (balance에서 payout 차감)
+/// - `settlement`: 정산 결과 (승자, 배당률 정보)
+/// - `bet`: 처리할 Bet (소유권 이전 → 함수 내에서 소각)
+/// - `ctx`: 트랜잭션 컨텍스트 (Coin 생성용)
+///
+/// ## Returns
+/// - `Coin<DEL>`: 배당금 (승자) 또는 0 DEL (패자)
+///   - 호출자(Admin/Cron)가 이 Coin을 유저에게 transfer 해야 함
+///
+/// ## Errors
+/// - E_ALREADY_SETTLED: Pool이 SETTLED 상태가 아님 (오류 네이밍 주의)
+/// - E_ROUND_MISMATCH: bet과 settlement의 라운드가 다름
+///
+/// ## 주의
+/// - Bet 객체는 이 함수 호출 후 소각됨 (재사용 불가)
+/// - 패자도 이 함수를 통해 처리해야 Bet이 정리됨
+public fun distribute_payout(
+    _admin: &AdminCap,
+    pool: &mut BettingPool,
+    settlement: &Settlement,
+    bet: Bet,
+    ctx: &mut TxContext,
+): Coin<DEL> {
+    // 1. 검증
+    // Pool이 정산 완료 상태인지 확인
+    assert!(pool.status == STATUS_SETTLED, E_ALREADY_SETTLED);
+    // Bet이 이 라운드에 속하는지 확인
+    assert!(pool.round_id == settlement.round_id, E_ROUND_MISMATCH);
+
+    // 2. 배당금 계산
+    // 승자: bet.amount * payout_ratio / 100
+    // 패자: 0
+    let winner = settlement.winner;
+    let payout = if (bet.prediction == winner) {
+        bet.amount * settlement.payout_ratio / RATIO_SCALE
+    } else {
+        0
+    };
+
+    // 3. Bet 소각
+    // Move의 linear type: drop trait 없으면 명시적으로 처리해야 함
+    // destructure로 분해 → UID만 delete
+    let Bet { id, pool_id: _, user: _, prediction: _, amount: _, timestamp: _ } = bet;
+    object::delete(id);
+
+    // 4. 배당금 전송
+    // 패자는 0 코인 반환
+    if (payout == 0) {
+        return coin::zero<DEL>(ctx)
+    };
+
+    // 승자는 winning balance에서 payout 분리
+    let payout_balance = if (winner == WINNER_GOLD) {
+        balance::split(&mut pool.gold_balance, payout)
+    } else {
+        balance::split(&mut pool.btc_balance, payout)
+    };
+
+    // Balance → Coin 변환해서 반환
+    coin::from_balance(payout_balance, ctx)
 }
