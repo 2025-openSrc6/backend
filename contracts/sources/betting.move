@@ -4,6 +4,7 @@ use deltax::del::DEL;
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
+use sui::event;
 
 const STATUS_OPEN: u8 = 1;
 const STATUS_LOCKED: u8 = 2;
@@ -98,6 +99,46 @@ public struct Settlement has key {
     payout_ratio: u64, // 178 = 1.78x
     // 메타
     settled_at: u64,
+}
+
+// events
+
+/// 베팅 생성 이벤트
+public struct BetPlaced has copy, drop {
+    bet_id: ID,
+    pool_id: ID,
+    user: address,
+    prediction: u8,
+    amount: u64,
+    timestamp: u64,
+}
+
+/// 정산 완료 이벤트
+public struct SettlementCreated has copy, drop {
+    settlement_id: ID,
+    pool_id: ID,
+    round_id: u64,
+    winner: u8,
+    payout_ratio: u64,
+    settled_at: u64,
+}
+
+/// 배당 전송 이벤트
+public struct PayoutDistributed has copy, drop {
+    settlement_id: ID,
+    bet_id: ID,
+    user: address,
+    amount: u64,
+    timestamp: u64,
+}
+
+/// 풀 상태 변경 이벤트
+public struct PoolStatusChanged has copy, drop {
+    pool_id: ID,
+    round_id: u64,
+    old_status: u8,
+    new_status: u8,
+    timestamp: u64,
 }
 
 // ============ Init ============
@@ -241,7 +282,18 @@ public fun place_bet(
     };
     let bet_id = object::id(&bet);
     transfer::transfer(bet, user);
-    // 5. Bet ID 반환
+
+    // 5. Event emit
+    event::emit(BetPlaced {
+        bet_id,
+        pool_id: object::id(pool),
+        user,
+        prediction,
+        amount,
+        timestamp: now,
+    });
+
+    // 6. Bet ID 반환
     bet_id
 }
 
@@ -273,7 +325,17 @@ public fun lock_pool(_admin: &AdminCap, pool: &mut BettingPool, clock: &Clock) {
     assert!(now >= pool.lock_time, E_TOO_EARLY);
 
     // 2. 상태 변경
+    let old_status = pool.status;
     pool.status = STATUS_LOCKED;
+
+    // 3. Event emit
+    event::emit(PoolStatusChanged {
+        pool_id: object::id(pool),
+        round_id: pool.round_id,
+        old_status,
+        new_status: STATUS_LOCKED,
+        timestamp: now,
+    });
 }
 
 /// # 라운드 정산 (Admin 전용)
@@ -401,7 +463,17 @@ public fun finalize_round(
     // 5. 상태 변경
     pool.status = STATUS_SETTLED;
 
-    // 6. ID 반환
+    // 6. Event emit
+    event::emit(SettlementCreated {
+        settlement_id,
+        pool_id: object::id(pool),
+        round_id: pool.round_id,
+        winner,
+        payout_ratio,
+        settled_at: now,
+    });
+
+    // 7. ID 반환
     settlement_id
 }
 
@@ -440,6 +512,7 @@ public fun distribute_payout(
     pool: &mut BettingPool,
     settlement: &Settlement,
     bet: Bet,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<DEL> {
     // 1. 검증
@@ -448,10 +521,11 @@ public fun distribute_payout(
     // Bet이 이 라운드에 속하는지 확인
     assert!(pool.round_id == settlement.round_id, E_ROUND_MISMATCH);
 
-    // 2. 배당금 계산
-    // 승자: bet.amount * payout_ratio / 100
-    // 패자: 0
+    // 2. 배당금 계산 (소각 전에 필요한 값 추출)
+    let now = clock::timestamp_ms(clock);
     let winner = settlement.winner;
+    let bet_id = object::id(&bet);
+    let bet_user = bet.user;
     let payout = if (bet.prediction == winner) {
         bet.amount * settlement.payout_ratio / RATIO_SCALE
     } else {
@@ -477,6 +551,17 @@ public fun distribute_payout(
         balance::split(&mut pool.btc_balance, payout)
     };
 
-    // Balance → Coin 변환해서 반환
-    coin::from_balance(payout_balance, ctx)
+    // Balance → Coin 변환
+    let payout_coin = coin::from_balance(payout_balance, ctx);
+
+    // 5. Event emit
+    event::emit(PayoutDistributed {
+        settlement_id: object::id(settlement),
+        bet_id,
+        user: bet_user,
+        amount: payout,
+        timestamp: now,
+    });
+
+    payout_coin
 }
