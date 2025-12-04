@@ -35,6 +35,7 @@ const E_TOO_EARLY: u64 = 11;
 const E_ALREADY_SETTLED: u64 = 12;
 const E_NOT_WINNER: u64 = 13;
 const E_ROUND_MISMATCH: u64 = 14;
+const E_BET_POOL_MISMATCH: u64 = 15;
 
 // ============ Structs ============
 
@@ -530,8 +531,10 @@ public fun distribute_payout(
     // 1. 검증
     // Pool이 정산 완료 상태인지 확인
     assert!(pool.status == STATUS_SETTLED, E_ALREADY_SETTLED);
-    // Bet이 이 라운드에 속하는지 확인
+    // Settlement가 이 Pool의 라운드와 일치하는지 확인
     assert!(pool.round_id == settlement.round_id, E_ROUND_MISMATCH);
+    // Bet이 이 Pool에 속하는지 확인 (pool_id 검증)
+    assert!(bet.pool_id == object::id(pool), E_BET_POOL_MISMATCH);
 
     // 2. 배당금 계산 (소각 전에 필요한 값 추출)
     let now = clock::timestamp_ms(clock);
@@ -691,3 +694,6 @@ public fun e_already_settled(): u64 { E_ALREADY_SETTLED }
 
 #[test_only]
 public fun e_round_mismatch(): u64 { E_ROUND_MISMATCH }
+
+#[test_only]
+public fun e_bet_pool_mismatch(): u64 { E_BET_POOL_MISMATCH }
