@@ -14,6 +14,8 @@ import { BetService } from './bets/service';
 import { BetRepository } from './bets/repository';
 import { RoundRepository } from './rounds/repository';
 import { RoundService } from './rounds/service';
+import { UserRepository } from './users/repository';
+import { UserService } from './users/service';
 
 /**
  * 의존성 조립을 담당하는 클래스
@@ -57,6 +59,22 @@ class ServiceRegistry {
     return this._betService;
   }
 
+  private _userRepository?: UserRepository;
+  get userRepository(): UserRepository {
+    if (!this._userRepository) {
+      this._userRepository = new UserRepository();
+    }
+    return this._userRepository;
+  }
+
+  private _userService?: UserService;
+  get userService(): UserService {
+    if (!this._userService) {
+      this._userService = new UserService(this.userRepository);
+    }
+    return this._userService;
+  }
+
   // 테스트용: Mock으로 교체
   setRoundRepository(repository: RoundRepository): void {
     this._roundRepository = repository;
@@ -82,6 +100,8 @@ class ServiceRegistry {
     this._roundService = undefined;
     this._betRepository = undefined;
     this._betService = undefined;
+    this._userRepository = undefined;
+    this._userService = undefined;
   }
 }
 

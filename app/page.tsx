@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { RankingList } from '@/components/RankingList';
 import { AccountConnectCard } from '@/components/AccountConnectCard';
 import { PointsPanel } from '@/components/PointsPanel';
 import { DashboardMiniChart } from '@/components/DashboardMiniChart';
+import { useCurrentWallet, useConnectWallet, useWallets, useDisconnectWallet } from '@mysten/dapp-kit';
 
 // 메인 트레이드 대시보드 (Basevol 스타일 레이아웃 레퍼런스)
 export default function HomePage() {
@@ -19,13 +20,128 @@ export default function HomePage() {
   const [points, setPoints] = useState(12000);
   const [timeframe, setTimeframe] = useState<'1M' | '6H' | '1D'>('1D');
 
-  const handleConnect = () => {
-    setIsConnected(true);
-    // TODO: 실제 연결 로직에서 지갑 주소 세팅
-    setWalletAddress('0x742d...9f3a');
+  const { currentWallet } = useCurrentWallet();
+  const { mutate: connectWallet } = useConnectWallet();
+  const { mutate: disconnectWallet } = useDisconnectWallet();
+  const wallets = useWallets();
+
+  // 페이지 로드 시 쿠키에서 주소 읽어서 상태 복원
+  useEffect(() => {
+    fetch('/api/auth/session', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.user) {
+          setIsConnected(true);
+          setWalletAddress(data.data.user.suiAddress);
+        }
+      })
+      .catch(() => {
+        // 에러 무시 (로그인 안 된 상태일 수 있음)
+      });
+  }, []);
+
+  // currentWallet 상태 동기화
+  useEffect(() => {
+    if (currentWallet?.accounts[0]?.address) {
+      const address = currentWallet.accounts[0].address;
+      setIsConnected(true);
+      setWalletAddress(address);
+    } else if (!currentWallet) {
+      setIsConnected(false);
+      setWalletAddress('');
+    }
+  }, [currentWallet]);
+
+  const handleConnect = async () => {
+    // 사용 가능한 지갑이 없으면 에러 처리
+    if (wallets.length === 0) {
+      alert('사용 가능한 지갑이 없습니다. Sui 지갑 확장 프로그램을 설치해주세요.');
+      return;
+    }
+
+    // 첫 번째 사용 가능한 지갑 사용
+    const wallet = wallets[0];
+
+    try {
+      // 지갑의 connect 메서드를 직접 호출
+      if (wallet.features && wallet.features['standard:connect']) {
+        const connectFeature = wallet.features['standard:connect'];
+        const result = await connectFeature.connect();
+
+        if (result.accounts && result.accounts.length > 0) {
+          const address = result.accounts[0].address;
+
+          // API 호출
+          const response = await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ suiAddress: address }),
+          });
+
+          if (response.ok) {
+            setIsConnected(true);
+            setWalletAddress(address);
+          }
+        }
+      } else {
+        // fallback: useConnectWallet 사용
+        connectWallet(
+          { wallet: wallet.name },
+          {
+            onSuccess: async (result) => {
+              const address = result.accounts[0].address;
+
+              // API 호출
+              const response = await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ suiAddress: address }),
+              });
+
+              if (response.ok) {
+                setIsConnected(true);
+                setWalletAddress(address);
+              }
+            },
+            onError: (error) => {
+              console.error('지갑 연결 실패:', error);
+              alert('지갑 연결에 실패했습니다. 다시 시도해주세요.');
+            },
+          },
+        );
+      }
+    } catch (error) {
+      console.error('지갑 연결 중 오류:', error);
+      alert('지갑 연결 중 오류가 발생했습니다.');
+    }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    // 로그아웃 API 호출
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {
+      // 에러 무시
+    });
+
+    // 지갑 연결 해제
+    if (currentWallet) {
+      // 지갑의 disconnect 기능을 직접 호출
+      if (currentWallet.features && currentWallet.features['standard:disconnect']) {
+        const disconnectFeature = currentWallet.features['standard:disconnect'];
+        await disconnectFeature.disconnect();
+      } else {
+        // fallback: useDisconnectWallet 사용
+        disconnectWallet();
+      }
+    } else {
+      // useDisconnectWallet 사용
+      disconnectWallet();
+    }
+    
     setIsConnected(false);
     setWalletAddress('');
   };
