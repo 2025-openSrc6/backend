@@ -85,14 +85,23 @@ export default function HomePage() {
           });
 
           if (response.ok) {
-            setIsConnected(true);
-            setWalletAddress(address);
+            const data = await response.json();
+            if (data.success) {
+              setIsConnected(true);
+              setWalletAddress(address);
+            } else {
+              // 에러 응답 처리
+              alert(data.error?.message || '로그인에 실패했습니다.');
+            }
+          } else {
+            const error = await response.json();
+            alert(error.error?.message || '로그인에 실패했습니다.');
           }
         }
       } else {
         // fallback: useConnectWallet 사용
         connectWallet(
-          { wallet: wallet.name },
+          { wallet },
           {
             onSuccess: async (result) => {
               const address = result.accounts[0].address;
@@ -106,8 +115,17 @@ export default function HomePage() {
               });
 
               if (response.ok) {
-                setIsConnected(true);
-                setWalletAddress(address);
+                const data = await response.json();
+                if (data.success) {
+                  setIsConnected(true);
+                  setWalletAddress(address);
+                } else {
+                  // 에러 응답 처리
+                  alert(data.error?.message || '로그인에 실패했습니다.');
+                }
+              } else {
+                const error = await response.json();
+                alert(error.error?.message || '로그인에 실패했습니다.');
               }
             },
             onError: (error) => {
