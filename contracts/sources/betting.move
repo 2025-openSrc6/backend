@@ -359,7 +359,8 @@ public fun lock_pool(_admin: &AdminCap, pool: &mut BettingPool, clock: &Clock) {
 /// - `clock`: 현재 시간
 ///
 /// ## Returns
-/// - 생성된 Settlement ID
+/// - `(ID, Coin<DEL>)`: (Settlement ID, Platform Fee Coin)
+///   - 호출자가 fee_coin을 Admin에게 transfer해야 함
 ///
 /// ## Errors
 /// - E_NOT_LOCKED: LOCKED 상태가 아님
@@ -373,7 +374,7 @@ public fun finalize_round(
     btc_end: u64,
     clock: &Clock,
     ctx: &mut TxContext,
-): ID {
+): (ID, Coin<DEL>) {
     let now = clock::timestamp_ms(clock);
     // 1. 검증
     assert!(pool.status == STATUS_LOCKED, E_NOT_LOCKED);
@@ -424,10 +425,20 @@ public fun finalize_round(
     // 플랫폼 수수료 (5%)
     let platform_fee = pool.total_pool * PLATFORM_FEE_RATE / 100;
 
+    // fee coin 생성 (호출자가 Admin에게 transfer)
+    let fee_coin = if (platform_fee > 0) {
+        let fee_balance = if (winner == WINNER_GOLD) {
+            balance::split(&mut pool.gold_balance, platform_fee)
+        } else {
+            balance::split(&mut pool.btc_balance, platform_fee)
+        };
+        coin::from_balance(fee_balance, ctx)
+    } else {
+        coin::zero<DEL>(ctx)
+    };
+
     // 배당 풀 (총액 - 수수료)
     let payout_pool = pool.total_pool - platform_fee;
-
-    // TODO(ehdnd): fee 처리. winning 에서 admin 전송
 
     // 배당률 (예: 178 = 1.78배)
     // 승자 풀이 0이면 divide by zero 방지
@@ -473,8 +484,9 @@ public fun finalize_round(
         settled_at: now,
     });
 
-    // 7. ID 반환
-    settlement_id
+    // 7. 튜플 반환 (Settlement ID, Fee Coin)
+    // 호출자(Next.js)가 fee_coin을 Admin에게 transfer해야 함
+    (settlement_id, fee_coin)
 }
 
 /// # 배당 전송 (Admin 전용)
