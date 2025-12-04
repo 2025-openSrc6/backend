@@ -6,11 +6,7 @@ import type { User, NewUser } from '@/db/schema/users';
 export class UserRepository {
   async findBySuiAddress(suiAddress: string): Promise<User | null> {
     const db = getDb();
-    const result = await db
-      .select()
-      .from(users)
-      .where(eq(users.suiAddress, suiAddress))
-      .limit(1);
+    const result = await db.select().from(users).where(eq(users.suiAddress, suiAddress)).limit(1);
     return result[0] || null;
   }
 
@@ -27,11 +23,7 @@ export class UserRepository {
 
   async findById(id: string): Promise<User | null> {
     const db = getDb();
-    const result = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, id))
-      .limit(1);
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0] || null;
   }
 }

@@ -11,7 +11,12 @@ import { RankingList } from '@/components/RankingList';
 import { AccountConnectCard } from '@/components/AccountConnectCard';
 import { PointsPanel } from '@/components/PointsPanel';
 import { DashboardMiniChart } from '@/components/DashboardMiniChart';
-import { useCurrentWallet, useConnectWallet, useWallets, useDisconnectWallet } from '@mysten/dapp-kit';
+import {
+  useCurrentWallet,
+  useConnectWallet,
+  useWallets,
+  useDisconnectWallet,
+} from '@mysten/dapp-kit';
 
 // 메인 트레이드 대시보드 (Basevol 스타일 레이아웃 레퍼런스)
 export default function HomePage() {
@@ -141,7 +146,7 @@ export default function HomePage() {
       // useDisconnectWallet 사용
       disconnectWallet();
     }
-    
+
     setIsConnected(false);
     setWalletAddress('');
   };

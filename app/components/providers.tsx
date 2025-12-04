@@ -20,10 +20,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={{ testnet: { url: getFullnodeUrl('testnet') } }} defaultNetwork="testnet">
+      <SuiClientProvider
+        networks={{ testnet: { url: getFullnodeUrl('testnet') } }}
+        defaultNetwork="testnet"
+      >
         <WalletProvider>{children}</WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>
   );
 }
-

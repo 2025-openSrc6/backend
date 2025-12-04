@@ -33,14 +33,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { suiAddress } = await request.json();
-    
+
     if (!suiAddress || typeof suiAddress !== 'string') {
       return createErrorResponse(400, 'INVALID_INPUT', 'suiAddress is required');
     }
-    
+
     // 1. 유저 조회 또는 생성
     const user = await registry.userService.findOrCreateUser(suiAddress);
-    
+
     // 2. 쿠키에 suiAddress 저장
     const response = createSuccessResponse({ user });
     response.cookies.set('suiAddress', suiAddress, {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 7, // 7일
       path: '/',
     });
-    
+
     return response;
   } catch (error) {
     return handleApiError(error);
