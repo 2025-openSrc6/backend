@@ -172,25 +172,25 @@ public fun create_pool(
     pool_id
 }
 
-/// 베팅하기
+/// # 베팅하기
 ///
-/// # 흐름
+/// ## 흐름
 /// 1. 검증: 풀 상태, 시간, 예측값, 최소금액
 /// 2. Coin → Balance 변환 → Pool에 추가
 /// 3. 통계 업데이트
 /// 4. Bet 객체 생성 → 유저에게 전송
 ///
-/// # Arguments
+/// ## Arguments
 /// - `pool`: 베팅할 Pool (Shared Object, 수정 가능)
 /// - `user`: 실제 베팅 유저 주소 (Sponsored TX여도 진짜 유저)
 /// - `prediction`: 1=GOLD, 2=BTC
 /// - `payment`: 베팅할 DEL 코인 (소유권 이전됨 = 소비됨)
 /// - `clock`: Sui 시스템 Clock (현재 시간 확인용)
 ///
-/// # Returns
+/// ## Returns
 /// - 생성된 Bet의 ID
 ///
-/// # Errors
+/// ## Errors
 /// - E_POOL_NOT_OPEN: 풀이 OPEN 상태가 아님
 /// - E_TOO_LATE: 베팅 마감 시간 지남
 /// - E_INVALID_PREDICTION: prediction이 1 또는 2가 아님
@@ -243,4 +243,35 @@ public fun place_bet(
     transfer::transfer(bet, user);
     // 5. Bet ID 반환
     bet_id
+}
+
+/// # 베팅 마감 (Admin 전용)
+///
+/// ## 언제 호출?
+/// - 라운드 종료 5분 전 (lock_time 도달 시)
+/// - Cron Job이 호출
+///
+/// ## 흐름
+/// 1. 검증: 풀이 OPEN 상태인지, lock_time 지났는지
+/// 2. 상태 변경: OPEN → LOCKED
+///
+/// ## Arguments
+/// - `_admin`: AdminCap 참조 (권한 확인용)
+/// - `pool`: 잠글 Pool
+/// - `clock`: 현재 시간 확인용
+///
+/// ## Errors
+/// - E_POOL_NOT_OPEN: 이미 LOCKED거나 SETTLED
+/// - E_TOO_EARLY: lock_time 전에 호출함
+public fun lock_pool(_admin: &AdminCap, pool: &mut BettingPool, clock: &Clock) {
+    let now = clock::timestamp_ms(clock);
+
+    // 1. 검증
+    // 풀이 OPEN 상태여야 함
+    assert!(pool.status == STATUS_OPEN, E_POOL_NOT_OPEN);
+    // lock_time이 지났어야 함 (너무 일찍 잠그면 안 됨)
+    assert!(now >= pool.lock_time, E_TOO_EARLY);
+
+    // 2. 상태 변경
+    pool.status = STATUS_LOCKED;
 }
