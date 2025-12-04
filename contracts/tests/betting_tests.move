@@ -2237,3 +2237,209 @@ fun test_btc_wins_payout_scenario() {
 
     test_scenario::end(scenario);
 }
+
+/// TC-PAYOUT-007: Bet이 다른 Pool에 속할 때 실패 (E_BET_POOL_MISMATCH)
+/// 시나리오: Pool1에서 베팅한 Bet을 Pool2의 Settlement로 정산 시도
+#[test]
+#[expected_failure(abort_code = deltax::betting::E_BET_POOL_MISMATCH)]
+fun test_distribute_payout_bet_pool_mismatch() {
+    let mut scenario = setup_scenario();
+
+    // === Pool 1 설정 (User1이 베팅) ===
+
+    // Pool 1 생성 + DEL mint
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        betting::create_pool(&admin_cap, 1, LOCK_TIME, END_TIME, ctx);
+
+        test_scenario::return_to_sender(&scenario, admin_cap);
+    };
+
+    // DEL mint
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let mut treasury = test_scenario::take_from_sender<TreasuryCap<DEL>>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        del::mint(&mut treasury, 500_000_000_000, USER1, ctx);
+        del::mint(&mut treasury, 500_000_000_000, USER2, ctx);
+
+        test_scenario::return_to_sender(&scenario, treasury);
+    };
+
+    // User1이 Pool 1에 베팅
+    test_scenario::next_tx(&mut scenario, USER1);
+    {
+        let mut pool = test_scenario::take_shared<BettingPool>(&scenario);
+        let coin = test_scenario::take_from_sender<coin::Coin<DEL>>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let clock = clock::create_for_testing(ctx);
+
+        let mut coin = coin;
+        let bet_coin = coin::split(&mut coin, BET_AMOUNT_100, ctx);
+        betting::place_bet(&mut pool, USER1, betting::prediction_gold(), bet_coin, &clock, ctx);
+
+        clock::destroy_for_testing(clock);
+        test_scenario::return_shared(pool);
+        test_scenario::return_to_sender(&scenario, coin);
+    };
+
+    // Pool 1 잠금
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
+        let mut pool = test_scenario::take_shared<BettingPool>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, LOCK_TIME + 1000);
+
+        betting::lock_pool(&admin_cap, &mut pool, &clock);
+
+        clock::destroy_for_testing(clock);
+        test_scenario::return_shared(pool);
+        test_scenario::return_to_sender(&scenario, admin_cap);
+    };
+
+    // Pool 1 정산 (Settlement 생성)
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
+        let mut pool = test_scenario::take_shared<BettingPool>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, END_TIME + 1000);
+
+        let (_, fee_coin) = betting::finalize_round(
+            &admin_cap,
+            &mut pool,
+            265000,
+            270000,
+            10000000,
+            10100000,
+            &clock,
+            ctx,
+        );
+
+        coin::burn_for_testing(fee_coin);
+        clock::destroy_for_testing(clock);
+        test_scenario::return_shared(pool);
+        test_scenario::return_to_sender(&scenario, admin_cap);
+    };
+
+    // === Pool 2 설정 (같은 round_id로!) ===
+
+    // Pool 2 생성 (동일한 round_id = 1 사용!)
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        // 동일한 round_id = 1 로 생성 (악의적인 시도)
+        betting::create_pool(&admin_cap, 1, LOCK_TIME + HOUR_MS, END_TIME + HOUR_MS, ctx);
+
+        test_scenario::return_to_sender(&scenario, admin_cap);
+    };
+
+    // User2가 Pool 2에 베팅
+    test_scenario::next_tx(&mut scenario, USER2);
+    {
+        // 가장 최근 생성된 shared object (Pool 2)를 가져옴
+        let mut pool = test_scenario::take_shared<BettingPool>(&scenario);
+        let coin = test_scenario::take_from_sender<coin::Coin<DEL>>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let clock = clock::create_for_testing(ctx);
+
+        let mut coin = coin;
+        let bet_coin = coin::split(&mut coin, BET_AMOUNT_100, ctx);
+        betting::place_bet(&mut pool, USER2, betting::prediction_gold(), bet_coin, &clock, ctx);
+
+        clock::destroy_for_testing(clock);
+        test_scenario::return_shared(pool);
+        test_scenario::return_to_sender(&scenario, coin);
+    };
+
+    // Pool 2 잠금
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
+        let mut pool = test_scenario::take_shared<BettingPool>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, LOCK_TIME + HOUR_MS + 1000);
+
+        betting::lock_pool(&admin_cap, &mut pool, &clock);
+
+        clock::destroy_for_testing(clock);
+        test_scenario::return_shared(pool);
+        test_scenario::return_to_sender(&scenario, admin_cap);
+    };
+
+    // Pool 2 정산
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
+        let mut pool = test_scenario::take_shared<BettingPool>(&scenario);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, END_TIME + HOUR_MS + 1000);
+
+        let (_, fee_coin) = betting::finalize_round(
+            &admin_cap,
+            &mut pool,
+            265000,
+            270000,
+            10000000,
+            10100000,
+            &clock,
+            ctx,
+        );
+
+        coin::burn_for_testing(fee_coin);
+        clock::destroy_for_testing(clock);
+        test_scenario::return_shared(pool);
+        test_scenario::return_to_sender(&scenario, admin_cap);
+    };
+
+    // === 공격 시도: Pool 2에서 User1의 Bet (Pool 1 소속)으로 배당 청구 ===
+    // round_id는 같지만 (둘 다 1), pool_id는 다름!
+    test_scenario::next_tx(&mut scenario, ADMIN);
+    {
+        let admin_cap = test_scenario::take_from_sender<AdminCap>(&scenario);
+        // Pool 2 (가장 최근 shared)
+        let mut pool = test_scenario::take_shared<BettingPool>(&scenario);
+        // Pool 2의 Settlement (가장 최근 shared)
+        let settlement = test_scenario::take_shared<betting::Settlement>(&scenario);
+        // User1의 Bet (Pool 1 소속!)
+        let bet = test_scenario::take_from_address<betting::Bet>(&scenario, USER1);
+        let ctx = test_scenario::ctx(&mut scenario);
+
+        let mut clock = clock::create_for_testing(ctx);
+        clock::set_for_testing(&mut clock, END_TIME + HOUR_MS + 2000);
+
+        // 이 호출은 E_BET_POOL_MISMATCH로 실패해야 함!
+        // bet.pool_id (Pool 1) != object::id(pool) (Pool 2)
+        let payout_coin = betting::distribute_payout(
+            &admin_cap,
+            &mut pool,
+            &settlement,
+            bet,
+            &clock,
+            ctx,
+        );
+
+        coin::burn_for_testing(payout_coin);
+        clock::destroy_for_testing(clock);
+        test_scenario::return_shared(pool);
+        test_scenario::return_shared(settlement);
+        test_scenario::return_to_sender(&scenario, admin_cap);
+    };
+
+    test_scenario::end(scenario);
+}
