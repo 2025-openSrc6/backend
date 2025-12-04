@@ -29,15 +29,15 @@ deltaX Sui 블록체인 통합 기술 명세서
 
 ### 1.2 핵심 결정사항
 
-| #   | 항목          | 결정                         | 근거                     |
-| --- | ------------- | ---------------------------- | ------------------------ |
-| 1   | DEL 발행 정책 | **무제한 발행**              | 프로토타입 단계, 단순성  |
-| 2   | 트랜잭션 방식 | **백엔드 Sponsored**         | UX 우선, 유저 SUI 불필요 |
-| 3   | Pool 구조     | **라운드당 1개 Pool**        | 격리, 정산 단순화        |
-| 4   | 가격 데이터   | **Settlement에 온체인 기록** | 투명성, 검증 가능성      |
-| 5   | 수수료 수취   | **Sui에서 즉시 Admin 전송**  | 명확한 정산              |
-| 6   | 유저 인증     | **지갑 서명 검증**           | 보안                     |
-| 7   | Object 설계   | **Pool=Shared, Bet=Owned**   | 병렬성 + 소유권          |
+| #   | 항목          | 결정                              | 근거                     |
+| --- | ------------- | --------------------------------- | ------------------------ |
+| 1   | DEL 발행 정책 | **무제한 발행**                   | 프로토타입 단계, 단순성  |
+| 2   | 트랜잭션 방식 | **백엔드 Sponsored**              | UX 우선, 유저 SUI 불필요 |
+| 3   | Pool 구조     | **라운드당 1개 Pool**             | 격리, 정산 단순화        |
+| 4   | 가격 데이터   | **Settlement에 온체인 기록**      | 투명성, 검증 가능성      |
+| 5   | 수수료 수취   | **Coin 반환 (호출자가 transfer)** | Composability, PTB 호환  |
+| 6   | 유저 인증     | **지갑 서명 검증**                | 보안                     |
+| 7   | Object 설계   | **Pool=Shared, Bet=Owned**        | 병렬성 + 소유권          |
 
 ### 1.3 Sponsored Transaction + Event 정책
 
@@ -316,7 +316,7 @@ struct Settlement has key {
     btc_end: u64,
 
     // 결과
-    winner: u8,           // 1=GOLD, 2=BTC, 3=DRAW
+    winner: u8,           // 1=GOLD, 2=BTC (동점 시 GOLD 승리, DRAW 미구현)
 
     // 풀 정보
     total_pool: u64,
@@ -334,7 +334,7 @@ struct Settlement has key {
 ```move
 const WINNER_GOLD: u8 = 1;
 const WINNER_BTC: u8 = 2;
-const WINNER_DRAW: u8 = 3;
+// WINNER_DRAW: 미구현 (동점 시 GOLD 승리)
 
 const PLATFORM_FEE_RATE: u64 = 5;  // 5%
 const RATIO_SCALE: u64 = 100;
@@ -368,20 +368,15 @@ struct PayoutDistributed has copy, drop {
     timestamp: u64,
 }
 
-/// 환불 이벤트 (DRAW 시)
-struct RefundProcessed has copy, drop {
-    pool_id: ID,
-    bet_id: ID,
-    user: address,
-    amount: u64,
-    timestamp: u64,
-}
+// RefundProcessed: 미구현 (DRAW 없음)
 ```
 
 ##### 정산 함수
 
 ```move
 /// 라운드 정산 (Cron Job 4에서 호출)
+/// 반환: (Settlement ID, Platform Fee Coin)
+/// 호출자가 fee_coin을 Admin에게 transfer해야 함
 public fun finalize_round(
     _: &AdminCap,
     pool: &mut BettingPool,
@@ -391,25 +386,20 @@ public fun finalize_round(
     btc_end: u64,
     clock: &Clock,
     ctx: &mut TxContext
-): ID
+): (ID, Coin<DEL>)
 
 /// 승자 배당 전송 (Cron Job 5에서 호출)
+/// 패자도 이 함수로 처리 (0 DEL 반환, Bet 소각)
 public fun distribute_payout(
     _: &AdminCap,
     pool: &mut BettingPool,
     settlement: &Settlement,
     bet: Bet,               // 소유권 이전 (소각됨)
+    clock: &Clock,          // timestamp용
     ctx: &mut TxContext
 ): Coin<DEL>
 
-/// DRAW 시 환불
-public fun refund_bet(
-    _: &AdminCap,
-    pool: &mut BettingPool,
-    settlement: &Settlement,
-    bet: Bet,
-    ctx: &mut TxContext
-): Coin<DEL>
+// refund_bet: 미구현 (DRAW 없음, 동점 시 GOLD 승리)
 ```
 
 ---
@@ -1038,6 +1028,41 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 
 ## 변경 이력
 
-| 버전  | 날짜       | 변경 내용 |
-| ----- | ---------- | --------- |
-| 0.1.0 | 2024-12-01 | 초안 작성 |
+| 버전  | 날짜       | 변경 내용                                                                                                                            |
+| ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 0.1.0 | 2024-12-01 | 초안 작성                                                                                                                            |
+| 0.2.0 | 2024-12-04 | 구현 반영: finalize_round 반환타입 변경 `(ID, Coin<DEL>)`, DRAW 미구현(동점시 GOLD), refund_bet 제거, distribute_payout에 clock 추가 |
+
+---
+
+## 부록: 의사결정 기록
+
+### D1. Fee 처리 방식 (2024-12-04)
+
+**문제**: `finalize_round`에서 fee를 Admin에게 직접 transfer 시 warning 발생
+
+```
+warning[Lint W99001]: non-composable transfer to sender
+```
+
+**결정**: `(ID, Coin<DEL>)` 튜플 반환으로 변경
+
+- 호출자(Next.js)가 PTB에서 fee_coin을 Admin에게 transfer
+- Composability 유지, Sui 철학 준수
+
+### D2. DRAW 처리 (2024-12-04)
+
+**문제**: 스펙에 DRAW(동점) 케이스 있으나, 비즈니스 로직상 필요성 낮음
+
+**결정**: 미구현, 동점 시 GOLD 승리
+
+- `WINNER_DRAW`, `refund_bet`, `RefundProcessed` 제거
+- 프로토타입 단계 단순화
+- 추후 필요시 추가
+
+### D3. distribute_payout 패자 처리 (2024-12-04)
+
+**결정**: 패자도 동일 함수로 처리
+
+- 패자: 0 DEL Coin 반환, Bet 소각
+- 승자/패자 분기 없이 일관된 인터페이스
