@@ -1,15 +1,16 @@
 [package]
-name = "deltaX"
-version = "0.0.1"
-edition = "2024.beta"
-
-[addresses]
-deltaX = "0x0"
-std = "0x1"
-sui = "0x2"
+name = "deltax"
+edition = "2024.beta" # Using beta as 2024 is not fully stable yet in some environments, but following best practice to use latest available.
+authors = ["DeltaX Team"]
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
 
+[addresses]
+deltax = "0x0"
+
+[dev-dependencies]
+# Test-only dependencies
+
 [dev-addresses]
-deltaX = "0x0"
+# Test-only address overrides
